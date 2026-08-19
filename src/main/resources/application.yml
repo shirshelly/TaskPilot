@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: taskpilot
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/taskpilot}
+    username: ${DB_USERNAME:taskpilot}
+    password: ${DB_PASSWORD:taskpilot}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
