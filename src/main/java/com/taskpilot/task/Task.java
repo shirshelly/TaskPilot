@@ -164,6 +164,15 @@ public class Task {
         // scheduledFor is intentionally preserved after activation (§7).
     }
 
+    public boolean isOverdue(Clock clock) {
+        LocalDate today = LocalDate.now(clock);
+        boolean isDeadlineOverdue = deadline != null && deadline.isBefore(today);
+        boolean isScheduleOverdue = status == TaskStatus.ACTIVE
+                && scheduledFor != null
+                && localDateOf(scheduledFor, clock).isBefore(today);
+        return isDeadlineOverdue || isScheduleOverdue;
+    }
+
     // --- non-lifecycle updates ---
 
     public void rename(String newTitle, Clock clock) {
