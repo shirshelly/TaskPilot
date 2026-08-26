@@ -11,9 +11,14 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -61,5 +66,49 @@ class TaskServiceTest {
 
         assertThat(result.getStatus()).isEqualTo(TaskStatus.SCHEDULED);
         assertThat(result.getScheduledFor()).isEqualTo(future);
+    }
+
+    @Test
+    void getReturnsTheTaskFoundByRepository() {
+        TaskService taskService = new TaskService(taskRepository, CLOCK);
+        Task task = Task.create("Task", null, null, null, null, null, CLOCK);
+        when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
+
+        Task result = taskService.get(task.getId());
+
+        assertThat(result).isSameAs(task);
+    }
+
+    @Test
+    void getThrowsTaskNotFoundExceptionWhenRepositoryFindsNothing() {
+        TaskService taskService = new TaskService(taskRepository, CLOCK);
+        UUID id = UUID.randomUUID();
+        when(taskRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> taskService.get(id)).isInstanceOf(TaskNotFoundException.class);
+    }
+
+    @Test
+    void listWithNoStatusReturnsAllTasks() {
+        TaskService taskService = new TaskService(taskRepository, CLOCK);
+        Task task = Task.create("Task", null, null, null, null, null, CLOCK);
+        when(taskRepository.findAll()).thenReturn(List.of(task));
+
+        List<Task> result = taskService.list(null);
+
+        assertThat(result).containsExactly(task);
+        verify(taskRepository, never()).findByStatus(any());
+    }
+
+    @Test
+    void listWithStatusDelegatesToFindByStatus() {
+        TaskService taskService = new TaskService(taskRepository, CLOCK);
+        Task task = Task.create("Task", null, null, null, null, null, CLOCK);
+        when(taskRepository.findByStatus(TaskStatus.ACTIVE)).thenReturn(List.of(task));
+
+        List<Task> result = taskService.list(TaskStatus.ACTIVE);
+
+        assertThat(result).containsExactly(task);
+        verify(taskRepository, never()).findAll();
     }
 }

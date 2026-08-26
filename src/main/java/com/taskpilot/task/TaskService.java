@@ -5,6 +5,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.util.List;
+import java.util.UUID;
 
 @Service
 public class TaskService {
@@ -28,5 +30,16 @@ public class TaskService {
                 request.scheduledFor(),
                 clock);
         return taskRepository.save(task);
+    }
+
+    @Transactional(readOnly = true)
+    public Task get(UUID id) {
+        return taskRepository.findById(id)
+                .orElseThrow(() -> new TaskNotFoundException(id));
+    }
+
+    @Transactional(readOnly = true)
+    public List<Task> list(TaskStatus status) {
+        return status == null ? taskRepository.findAll() : taskRepository.findByStatus(status);
     }
 }
