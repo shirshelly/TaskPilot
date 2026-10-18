@@ -81,6 +81,9 @@
     @apply font-sans antialiased;
     -webkit-tap-highlight-color: transparent;
   }
+  ::selection {
+    background: oklch(0.88 0.05 190);
+  }
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "ss01", "cv11";

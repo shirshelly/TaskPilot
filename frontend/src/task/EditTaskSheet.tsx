@@ -163,7 +163,7 @@ export function EditTaskSheet({ task, open, onOpenChange }: { task: Task; open: 
   return (
     <>
       <Sheet open={open} onOpenChange={requestClose}>
-        <SheetContent className="w-full gap-0 p-0 sm:max-w-md">
+        <SheetContent className="gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-md">
           <form onSubmit={submit} noValidate className="flex h-full flex-col">
             <SheetHeader className="border-b border-border px-5 py-4">
               <SheetTitle className="font-serif text-2xl font-normal">Edit task</SheetTitle>

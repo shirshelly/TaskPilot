@@ -95,7 +95,7 @@ export function ScheduleDialog({
             <DialogTitle>{scheduleLabel}</DialogTitle>
             <DialogDescription>
               <span className="font-medium text-foreground">{task.title}</span>
-              {task.scheduledFor && <> · now {inSentence(formatSchedule(task.scheduledFor, zone, today))}</>}
+              {task.scheduledFor && <> · currently {inSentence(formatSchedule(task.scheduledFor, zone, today))}</>}
             </DialogDescription>
           </DialogHeader>
 
