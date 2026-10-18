@@ -1108,14 +1108,55 @@ optional duration eligibility
 deterministic ranking
 ```
 
-Ranking may use:
-
-- importance
-- deadline proximity
-- estimated duration
-- age
-
 Do not allow the ranker to redefine actionability.
+
+### Eligibility
+
+```text
+actionable(task) = status == ACTIVE
+
+no availableMinutes   → every actionable task is eligible (unknown duration included)
+availableMinutes = N  → estimatedDurationMinutes != null AND estimatedDurationMinutes <= N
+```
+
+`availableMinutes` must be a positive integer (`0`, negative, or non-numeric → `400`). No upper bound.
+
+### V1 ranking formula
+
+Computed at request time; never persisted. `today` comes from the injected `Clock` and configured `ZoneId`.
+
+```text
+score = importancePoints + deadlinePoints + agePoints
+
+importancePoints = importance × 10                      (10..50)
+
+deadlinePoints:
+    no deadline              → 0
+    deadline < today         → 30   (flat: does not grow with days overdue)
+    deadline == today        → 25
+    deadline in 1–3 days     → 15
+    deadline in 4–7 days     → 5
+    deadline in 8+ days      → 0
+
+ageDays   = DAYS.between(createdAt as local date in the configured zone, today)
+agePoints = min(max(ageDays, 0), 5)                     (small anti-starvation nudge)
+```
+
+`estimatedDurationMinutes` contributes no points; it only affects eligibility and tie-breaking.
+`scheduledFor` does not participate in ranking.
+
+### Ordering (part of the API contract)
+
+```text
+1. score DESC
+2. deadline ASC, null last
+3. estimatedDurationMinutes ASC, null last
+4. createdAt ASC
+5. id ASC          (determinism only; no business meaning)
+```
+
+The response is a bare JSON array of `TaskResponse` containing **all** eligible tasks in this
+order. Scores are internal and not exposed. No limit/pagination in V1.
 
 ---
 
@@ -1632,7 +1673,7 @@ Examples:
 - closer deadline increases rank
 - age may increase rank according to the selected formula
 
-The exact ranking formula should be agreed before implementation rather than silently invented.
+The agreed V1 ranking formula and ordering are defined in §31.
 
 ---
 
