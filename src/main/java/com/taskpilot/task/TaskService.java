@@ -51,6 +51,13 @@ public class TaskService {
         return task;
     }
 
+    @Transactional
+    public Task reopen(UUID id) {
+        Task task = findOrThrow(id);
+        task.reopen(clock);
+        return task;
+    }
+
     private Task findOrThrow(UUID id) {
         return taskRepository.findById(id)
                 .orElseThrow(() -> new TaskNotFoundException(id));

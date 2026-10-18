@@ -54,4 +54,10 @@ public class TaskController {
         Task task = taskService.complete(id);
         return TaskResponse.from(task, clock);
     }
+
+    @PostMapping("/{id}/reopen")
+    public TaskResponse reopenTask(@PathVariable UUID id) {
+        Task task = taskService.reopen(id);
+        return TaskResponse.from(task, clock);
+    }
 }

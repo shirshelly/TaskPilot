@@ -158,14 +158,19 @@ class TaskTest {
         @Test
         void completedTaskCanReopenAndClearsCompletedAt() {
             OffsetDateTime scheduledFor = at(TODAY.minusDays(2), 8);
-            Task task = Task.create("Task", null, null, null, null, scheduledFor, clockOnToday());
+            LocalDate deadline = TODAY.plusDays(1);
+            Task task = Task.create("Task", null, null, null, deadline, scheduledFor, clockOnToday());
             task.complete(clockOnToday());
+            // Later than completion, so updatedAt provably comes from the reopen clock.
+            Clock reopenClock = Clock.offset(clockOnToday(), Duration.ofHours(3));
 
-            task.reopen(clockOnToday());
+            task.reopen(reopenClock);
 
             assertThat(task.getStatus()).isEqualTo(TaskStatus.ACTIVE);
             assertThat(task.getCompletedAt()).isNull();
+            assertThat(task.getUpdatedAt()).isEqualTo(reopenClock.instant());
             assertThat(task.getScheduledFor()).isEqualTo(scheduledFor);
+            assertThat(task.getDeadline()).isEqualTo(deadline);
         }
 
         @Test
