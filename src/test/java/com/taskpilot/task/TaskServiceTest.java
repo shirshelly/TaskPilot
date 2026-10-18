@@ -8,6 +8,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -110,5 +111,28 @@ class TaskServiceTest {
 
         assertThat(result).containsExactly(task);
         verify(taskRepository, never()).findAll();
+    }
+
+    @Test
+    void completeLoadsTheTaskAndCompletesItUsingTheInjectedClock() {
+        Clock creationClock = Clock.offset(CLOCK, Duration.ofDays(-1));
+        Task task = Task.create("Task", null, null, null, null, null, creationClock);
+        TaskService taskService = new TaskService(taskRepository, CLOCK);
+        when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
+
+        Task result = taskService.complete(task.getId());
+
+        assertThat(result).isSameAs(task);
+        assertThat(result.getStatus()).isEqualTo(TaskStatus.COMPLETED);
+        assertThat(result.getCompletedAt()).isEqualTo(CLOCK.instant());
+    }
+
+    @Test
+    void completeThrowsTaskNotFoundExceptionWhenRepositoryFindsNothing() {
+        TaskService taskService = new TaskService(taskRepository, CLOCK);
+        UUID id = UUID.randomUUID();
+        when(taskRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> taskService.complete(id)).isInstanceOf(TaskNotFoundException.class);
     }
 }

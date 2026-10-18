@@ -48,4 +48,10 @@ public class TaskController {
                 .map(task -> TaskResponse.from(task, clock))
                 .toList();
     }
+
+    @PostMapping("/{id}/complete")
+    public TaskResponse completeTask(@PathVariable UUID id) {
+        Task task = taskService.complete(id);
+        return TaskResponse.from(task, clock);
+    }
 }

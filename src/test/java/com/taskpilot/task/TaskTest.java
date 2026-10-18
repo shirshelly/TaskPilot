@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -106,25 +107,39 @@ class TaskTest {
     @Nested
     class Completion {
 
-        @Test
-        void activeTaskCanComplete() {
-            Task task = Task.create("Task", null, null, null, null, null, clockOnToday());
+        // Later than creation time, so completedAt/updatedAt provably come from the completion clock.
+        private final Clock completionClock = Clock.offset(clockOnToday(), Duration.ofHours(3));
 
-            task.complete(clockOnToday());
+        @Test
+        void activeTaskCanCompleteAndKeepsSchedulingContext() {
+            OffsetDateTime yesterday = at(TODAY.minusDays(1), 8);
+            LocalDate deadline = TODAY.plusDays(2);
+            Task task = Task.create("Task", null, null, null, deadline, yesterday, clockOnToday());
+            assertThat(task.getStatus()).isEqualTo(TaskStatus.ACTIVE);
+
+            task.complete(completionClock);
 
             assertThat(task.getStatus()).isEqualTo(TaskStatus.COMPLETED);
-            assertThat(task.getCompletedAt()).isNotNull();
+            assertThat(task.getCompletedAt()).isEqualTo(completionClock.instant());
+            assertThat(task.getUpdatedAt()).isEqualTo(completionClock.instant());
+            assertThat(task.getScheduledFor()).isEqualTo(yesterday);
+            assertThat(task.getDeadline()).isEqualTo(deadline);
         }
 
         @Test
-        void scheduledTaskCanCompleteDirectly() {
+        void scheduledTaskCanCompleteDirectlyAndKeepsSchedulingContext() {
             OffsetDateTime tomorrow = at(TODAY.plusDays(1), 9);
-            Task task = Task.create("Task", null, null, null, null, tomorrow, clockOnToday());
+            LocalDate passedDeadline = TODAY.minusDays(1);
+            Task task = Task.create("Task", null, null, null, passedDeadline, tomorrow, clockOnToday());
             assertThat(task.getStatus()).isEqualTo(TaskStatus.SCHEDULED);
 
-            task.complete(clockOnToday());
+            task.complete(completionClock);
 
             assertThat(task.getStatus()).isEqualTo(TaskStatus.COMPLETED);
+            assertThat(task.getCompletedAt()).isEqualTo(completionClock.instant());
+            assertThat(task.getUpdatedAt()).isEqualTo(completionClock.instant());
+            assertThat(task.getScheduledFor()).isEqualTo(tomorrow);
+            assertThat(task.getDeadline()).isEqualTo(passedDeadline);
         }
 
         @Test

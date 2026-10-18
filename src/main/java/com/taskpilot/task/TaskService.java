@@ -34,12 +34,25 @@ public class TaskService {
 
     @Transactional(readOnly = true)
     public Task get(UUID id) {
-        return taskRepository.findById(id)
-                .orElseThrow(() -> new TaskNotFoundException(id));
+        return findOrThrow(id);
     }
 
     @Transactional(readOnly = true)
     public List<Task> list(TaskStatus status) {
         return status == null ? taskRepository.findAll() : taskRepository.findByStatus(status);
+    }
+
+    @Transactional
+    public Task complete(UUID id) {
+        Task task = findOrThrow(id);
+        // No explicit save(): the task is managed, so dirty checking flushes the change on
+        // commit, and a stale @Version surfaces there as an optimistic-locking failure (§42).
+        task.complete(clock);
+        return task;
+    }
+
+    private Task findOrThrow(UUID id) {
+        return taskRepository.findById(id)
+                .orElseThrow(() -> new TaskNotFoundException(id));
     }
 }

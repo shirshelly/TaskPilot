@@ -262,8 +262,6 @@ completedAt = now
 updatedAt = now
 ```
 
-Only an ACTIVE task may be completed.
-
 Completing an already completed task is an invalid transition.
 
 ### SCHEDULED → COMPLETED
