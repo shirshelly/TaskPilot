@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.UUID;
 
@@ -152,6 +153,68 @@ class TaskRepositoryTest {
         taskRepository.delete(loaded);
         assertThatThrownBy(() -> taskRepository.flush())
                 .isInstanceOf(ObjectOptimisticLockingFailureException.class);
+    }
+
+    // --- Agenda query (§30). Bounds are what AgendaService derives for noon Aug 25 in Jerusalem (UTC+3).
+
+    private static final ZoneId JERUSALEM = ZoneId.of("Asia/Jerusalem");
+    private static final Clock JERUSALEM_NOON = Clock.fixed(Instant.parse("2026-08-25T09:00:00Z"), JERUSALEM);
+    private static final OffsetDateTime START_OF_TOMORROW_IN_JERUSALEM = OffsetDateTime.parse("2026-08-26T00:00:00+03:00");
+
+    @Test
+    void agendaIncludesUnfinishedTasksScheduledOrDueByTodayAndNothingElse() {
+        OffsetDateTime yesterdayMorning = OffsetDateTime.parse("2026-08-24T10:00:00+03:00");
+        OffsetDateTime todayEvening = OffsetDateTime.parse("2026-08-25T18:00:00+03:00");
+        OffsetDateTime tomorrowMorning = OffsetDateTime.parse("2026-08-26T09:00:00+03:00");
+        OffsetDateTime nextWeek = OffsetDateTime.parse("2026-09-01T09:00:00+03:00");
+
+        // included
+        saveTask("deadline today", TODAY, null);
+        saveTask("deadline passed", TODAY.minusDays(3), null);
+        saveTask("scheduled yesterday (rollover)", null, yesterdayMorning);
+        saveTask("scheduled later today", null, todayEvening);
+        saveTask("still SCHEDULED, deadline passed", TODAY.minusDays(1), nextWeek);
+        // excluded
+        saveTask("plain active", null, null);
+        saveTask("scheduled tomorrow, deadline later", TODAY.plusDays(5), tomorrowMorning);
+        saveCompletedTask("completed, scheduled today", null, todayEvening);
+        saveCompletedTask("completed, deadline passed", TODAY.minusDays(3), null);
+        entityManager.clear();
+
+        assertThat(taskRepository.findAgendaTasks(TODAY, START_OF_TOMORROW_IN_JERUSALEM))
+                .extracting(Task::getTitle)
+                .containsExactlyInAnyOrder(
+                        "deadline today",
+                        "deadline passed",
+                        "scheduled yesterday (rollover)",
+                        "scheduled later today",
+                        "still SCHEDULED, deadline passed");
+    }
+
+    @Test
+    void agendaUsesTheConfiguredZoneLocalDateNotTheUtcDate() {
+        // 20:59Z = 23:59 Aug 25 in Jerusalem -> today -> included.
+        saveTask("last minute of today", null, OffsetDateTime.parse("2026-08-25T20:59:00Z"));
+        // 21:00Z = local midnight Aug 26 -> tomorrow -> excluded (exclusive bound).
+        saveTask("local midnight", null, OffsetDateTime.parse("2026-08-25T21:00:00Z"));
+        // 22:00Z is still Aug 25 in UTC (UTC-date comparison would include it), but it is
+        // already 01:00 Aug 26 in Jerusalem -> tomorrow -> excluded.
+        saveTask("UTC today, Jerusalem tomorrow", null, OffsetDateTime.parse("2026-08-25T22:00:00Z"));
+        entityManager.clear();
+
+        assertThat(taskRepository.findAgendaTasks(TODAY, START_OF_TOMORROW_IN_JERUSALEM))
+                .extracting(Task::getTitle)
+                .containsExactly("last minute of today");
+    }
+
+    private void saveTask(String title, LocalDate deadline, OffsetDateTime scheduledFor) {
+        taskRepository.saveAndFlush(Task.create(title, null, null, null, deadline, scheduledFor, JERUSALEM_NOON));
+    }
+
+    private void saveCompletedTask(String title, LocalDate deadline, OffsetDateTime scheduledFor) {
+        Task task = Task.create(title, null, null, null, deadline, scheduledFor, JERUSALEM_NOON);
+        task.complete(JERUSALEM_NOON);
+        taskRepository.saveAndFlush(task);
     }
 
     @Test
