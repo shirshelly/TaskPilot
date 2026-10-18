@@ -1,5 +1,6 @@
 package com.taskpilot.task;
 
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,11 +14,14 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
 
     List<Task> findByStatus(TaskStatus status);
 
+    List<Task> findByStatus(TaskStatus status, Sort sort);
+
     /**
      * Agenda membership (§30): unfinished tasks scheduled on or before today, or due on or
      * before today. "scheduledFor local date <= today" is expressed as an instant comparison
      * against the start of tomorrow in the configured zone, so the result never depends on the
-     * database session's timezone. No ORDER BY: the design defines no Agenda ordering.
+     * database session's timezone. No ORDER BY: AgendaService orders the result in memory, reusing
+     * Task's overdue rules instead of restating them in JPQL.
      */
     @Query("""
             select t from Task t

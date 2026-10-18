@@ -508,6 +508,9 @@ rather than separate flags.
 
 ### V1 formula
 
+Implemented as `Task.isDeadlineOverdue`, `Task.isScheduleOverdue`, and `Task.isOverdue`
+(their OR); the Agenda ordering (§30) uses the two flags separately.
+
 ```text
 isDeadlineOverdue =
     deadline != null
@@ -1080,6 +1083,17 @@ GET /tasks?status=COMPLETED
 
 Do not build a large generic filtering/query language in V1.
 
+### Ordering
+
+Lists are returned in a deterministic order so clients never see rows reshuffle between reads:
+
+```text
+no filter, ACTIVE, SCHEDULED  → createdAt DESC, id ASC   (newest first)
+COMPLETED                     → completedAt DESC, id ASC (most recently completed first)
+```
+
+The `id` tie-breaker has no business meaning; it only makes equal timestamps stable.
+
 ---
 
 ## 30. GET /agenda/today
@@ -1105,6 +1119,37 @@ deadline <= today
 A normal ACTIVE task with neither schedule nor deadline does not appear.
 
 Agenda rollover is intentional.
+
+### Ordering
+
+The Agenda is one list, most time-critical first. Only dates and the overdue rules (§11)
+decide the order — never importance, duration, or age — so it stays a view of what is on
+today's plate rather than a second recommendation ranking (§31).
+
+Each task falls into the first matching tier, then is ordered by the date that placed it there:
+
+```text
+1. DEADLINE_OVERDUE   isDeadlineOverdue (deadline < today)          by deadline ASC
+2. SCHEDULE_OVERDUE   isScheduleOverdue (ACTIVE, schedule < today)  by schedule local date ASC
+3. DUE_TODAY          deadline == today
+4. DUE_SOON           deadline in today+1 .. today+3                by deadline ASC
+5. PLANNED            everything else (scheduled today or earlier)  by schedule local date ASC
+
+tie-breakers: scheduledFor ASC (timeline, nulls last), deadline ASC (nulls last),
+              createdAt ASC, id ASC
+```
+
+Tiers 1–2 are exactly `isOverdue`. Missed deadlines precede missed schedules because an
+activated task reads as schedule-overdue from the next day (§11), and those must not bury a
+real missed deadline. Past the three-day window a deadline stops outranking time of day: a
+task scheduled today at 09:00 precedes one scheduled at 16:00 that is due in a month.
+
+A SCHEDULED task whose date has passed but which the worker has not activated yet is not
+overdue (§11 requires ACTIVE); it leads the PLANNED tier until the next worker run.
+
+The order is applied in `AgendaService` (in memory), reusing `Task.isDeadlineOverdue` /
+`Task.isScheduleOverdue` rather than restating them in SQL. Database-level pagination of the
+Agenda would require moving the rule into the query; V1 does not paginate.
 
 ---
 

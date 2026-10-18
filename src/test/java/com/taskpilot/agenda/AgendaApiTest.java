@@ -36,7 +36,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * End-to-end HTTP -> AgendaController -> AgendaService -> TaskRepository -> PostgreSQL test
  * for GET /agenda/today (§30). The membership/timezone matrix lives in TaskRepositoryTest;
  * this proves the wiring with the real configured Clock/zone, on one mixed dataset showing
- * Agenda is not "all ACTIVE tasks". Order-independent: no Agenda ordering is defined.
+ * Agenda is not "all ACTIVE tasks". The ordering rules are covered by AgendaOrderingTest; one
+ * test here proves the endpoint returns that order.
  *
  * Not @Transactional, like the other API tests, so the re-read sees committed state.
  */
@@ -102,6 +103,26 @@ class AgendaApiTest {
             assertThat(after.getUpdatedAt()).isEqualTo(before.getUpdatedAt());
             assertThat(after.getVersion()).isEqualTo(before.getVersion());
         }
+    }
+
+    @Test
+    void returnsTheAgendaMostTimeCriticalFirst() throws Exception {
+        LocalDate today = LocalDate.now(clock);
+        save(Task.create("Scheduled today, due in a month", null, null, null, today.plusDays(30), inDaysAt(0, 16), clock));
+        save(Task.create("Scheduled today, no deadline", null, null, null, null, inDaysAt(0, 9), clock));
+        save(Task.create("Due today", null, null, null, today, null, clock));
+        save(Task.create("Overdue schedule", null, null, null, null, inDaysAt(-3, 9), clock));
+        save(Task.create("Overdue deadline", null, null, null, today.minusDays(1), null, clock));
+
+        String body = mockMvc.perform(get("/agenda/today"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        List<TaskResponse> agenda = objectMapper.readValue(body,
+                objectMapper.getTypeFactory().constructCollectionType(List.class, TaskResponse.class));
+
+        assertThat(agenda).extracting(TaskResponse::title).containsExactly(
+                "Overdue deadline", "Overdue schedule", "Due today",
+                "Scheduled today, no deadline", "Scheduled today, due in a month");
     }
 
     @Test

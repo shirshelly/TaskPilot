@@ -383,6 +383,64 @@ class TaskTest {
     }
 
     @Nested
+    class Overdue {
+
+        @Test
+        void deadlineBeforeTodayIsDeadlineOverdue() {
+            Task task = Task.create("Task", null, null, null, TODAY.minusDays(1), null, clockOnToday());
+
+            assertThat(task.isDeadlineOverdue(clockOnToday())).isTrue();
+            assertThat(task.isScheduleOverdue(clockOnToday())).isFalse();
+            assertThat(task.isOverdue(clockOnToday())).isTrue();
+        }
+
+        @Test
+        void deadlineTodayIsNotOverdueYet() {
+            Task task = Task.create("Task", null, null, null, TODAY, null, clockOnToday());
+
+            assertThat(task.isDeadlineOverdue(clockOnToday())).isFalse();
+            assertThat(task.isOverdue(clockOnToday())).isFalse();
+        }
+
+        @Test
+        void activeTaskScheduledBeforeTodayIsScheduleOverdue() {
+            Task task = Task.create("Task", null, null, null, null, at(TODAY.minusDays(1), 9), clockOnToday());
+            assertThat(task.getStatus()).isEqualTo(TaskStatus.ACTIVE);
+
+            assertThat(task.isScheduleOverdue(clockOnToday())).isTrue();
+            assertThat(task.isDeadlineOverdue(clockOnToday())).isFalse();
+            assertThat(task.isOverdue(clockOnToday())).isTrue();
+        }
+
+        @Test
+        void activeTaskScheduledForTodayIsNotOverdue() {
+            Task task = Task.create("Task", null, null, null, null, at(TODAY, 9), clockOnToday());
+
+            assertThat(task.isScheduleOverdue(clockOnToday())).isFalse();
+        }
+
+        @Test
+        void scheduledTaskWaitingForActivationIsNotScheduleOverdue() {
+            Clock earlier = Clock.offset(clockOnToday(), Duration.ofDays(-3));
+            Task task = Task.create("Task", null, null, null, null, at(TODAY.minusDays(1), 9), earlier);
+            assertThat(task.getStatus()).isEqualTo(TaskStatus.SCHEDULED);
+
+            assertThat(task.isScheduleOverdue(clockOnToday())).isFalse();
+        }
+
+        @Test
+        void scheduleDateIsJudgedInTheClockZone() {
+            // 22:30Z the day before is already 01:30 today in Jerusalem, so it is not overdue there.
+            OffsetDateTime lateYesterdayUtc = at(TODAY.minusDays(1), 22).plusMinutes(30);
+            Clock jerusalemNoon = Clock.fixed(TODAY.atTime(12, 0).atZone(JERUSALEM).toInstant(), JERUSALEM);
+            Task task = Task.create("Task", null, null, null, null, lateYesterdayUtc, jerusalemNoon);
+
+            assertThat(task.isScheduleOverdue(jerusalemNoon)).isFalse();
+            assertThat(task.isScheduleOverdue(clockOnToday())).isTrue();
+        }
+    }
+
+    @Nested
     class NonLifecycleUpdates {
 
         @Test

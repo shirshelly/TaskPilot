@@ -174,13 +174,24 @@ public class Task {
                 && !localDateOf(scheduledFor, clock).isAfter(LocalDate.now(clock));
     }
 
+    /** Overdue (§11) is computed, never stored: a passed deadline or a passed schedule date. */
     public boolean isOverdue(Clock clock) {
-        LocalDate today = LocalDate.now(clock);
-        boolean isDeadlineOverdue = deadline != null && deadline.isBefore(today);
-        boolean isScheduleOverdue = status == TaskStatus.ACTIVE
+        return isDeadlineOverdue(clock) || isScheduleOverdue(clock);
+    }
+
+    public boolean isDeadlineOverdue(Clock clock) {
+        return deadline != null && deadline.isBefore(LocalDate.now(clock));
+    }
+
+    /**
+     * ACTIVE only: a SCHEDULED task whose date has passed is waiting for the worker, not overdue.
+     * Because scheduledFor is preserved after activation (§7), an activated task reads as
+     * schedule-overdue from the next day until it is completed or rescheduled (§11).
+     */
+    public boolean isScheduleOverdue(Clock clock) {
+        return status == TaskStatus.ACTIVE
                 && scheduledFor != null
-                && localDateOf(scheduledFor, clock).isBefore(today);
-        return isDeadlineOverdue || isScheduleOverdue;
+                && localDateOf(scheduledFor, clock).isBefore(LocalDate.now(clock));
     }
 
     // --- non-lifecycle updates ---

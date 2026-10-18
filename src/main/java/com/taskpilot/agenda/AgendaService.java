@@ -27,6 +27,7 @@ public class AgendaService {
 
     @Transactional(readOnly = true)
     public List<Task> today() {
-        return taskRepository.findAgendaTasks(LocalDate.now(clock), DayBoundaries.startOfTomorrow(clock));
+        List<Task> tasks = taskRepository.findAgendaTasks(LocalDate.now(clock), DayBoundaries.startOfTomorrow(clock));
+        return AgendaOrdering.sort(tasks, clock);
     }
 }

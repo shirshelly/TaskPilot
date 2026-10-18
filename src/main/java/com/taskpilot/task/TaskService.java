@@ -2,6 +2,7 @@ package com.taskpilot.task;
 
 import com.taskpilot.task.dto.CreateTaskRequest;
 import com.taskpilot.task.dto.UpdateTaskRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,6 +14,9 @@ import java.util.UUID;
 
 @Service
 public class TaskService {
+
+    static final Sort NEWEST_FIRST = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.asc("id"));
+    static final Sort RECENTLY_COMPLETED_FIRST = Sort.by(Sort.Order.desc("completedAt"), Sort.Order.asc("id"));
 
     private final TaskRepository taskRepository;
     private final Clock clock;
@@ -40,9 +44,17 @@ public class TaskService {
         return findOrThrow(id);
     }
 
+    /**
+     * Deterministic list order (§29): newest first, except COMPLETED, which lists the most recently
+     * completed first. The id tie-breaker only makes equal timestamps stable.
+     */
     @Transactional(readOnly = true)
     public List<Task> list(TaskStatus status) {
-        return status == null ? taskRepository.findAll() : taskRepository.findByStatus(status);
+        if (status == null) {
+            return taskRepository.findAll(NEWEST_FIRST);
+        }
+        return taskRepository.findByStatus(status,
+                status == TaskStatus.COMPLETED ? RECENTLY_COMPLETED_FIRST : NEWEST_FIRST);
     }
 
     @Transactional

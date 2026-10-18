@@ -17,12 +17,15 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZonedDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -33,7 +36,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * End-to-end HTTP -> Controller -> Service -> Repository -> PostgreSQL tests for the
  * read endpoints (§43). Fixtures are seeded directly via TaskRepository rather than
  * through POST /tasks, since creation behavior is already covered by TaskCreationApiTest.
- * No test asserts on list ordering: the design doesn't define one (see TaskController).
+ * List ordering (§29) is asserted by the dedicated ordering tests; the filter tests only check
+ * membership.
  */
 @Import(FixedClockTestConfiguration.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
@@ -123,6 +127,36 @@ class TaskReadApiTest {
     }
 
     @Test
+    void listsNewestFirstWithIdAsTieBreaker() throws Exception {
+        Task oldest = taskRepository.save(Task.create("Oldest", null, null, null, null, null, daysAgo(2)));
+        Task tieA = taskRepository.save(Task.create("Tie A", null, null, null, null, null, daysAgo(1)));
+        Task tieB = taskRepository.save(Task.create("Tie B", null, null, null, null, null, daysAgo(1)));
+        Task newest = taskRepository.save(Task.create("Newest", null, null, null, null, null, clock));
+
+        // PostgreSQL orders uuid bytewise, which matches the canonical lowercase string order.
+        List<UUID> tie = Stream.of(tieA.getId(), tieB.getId()).sorted(Comparator.comparing(UUID::toString)).toList();
+
+        assertThat(performListAndParse(get("/tasks"))).extracting(TaskResponse::id)
+                .containsExactly(newest.getId(), tie.get(0), tie.get(1), oldest.getId());
+        assertThat(performListAndParse(get("/tasks").param("status", "ACTIVE"))).extracting(TaskResponse::id)
+                .containsExactly(newest.getId(), tie.get(0), tie.get(1), oldest.getId());
+    }
+
+    @Test
+    void listsCompletedTasksMostRecentlyCompletedFirst() throws Exception {
+        // Created in the opposite order from completion, so createdAt ordering would fail this test.
+        Task completedLast = Task.create("Completed last", null, null, null, null, null, daysAgo(3));
+        completedLast.complete(clock);
+        Task completedFirst = Task.create("Completed first", null, null, null, null, null, daysAgo(1));
+        completedFirst.complete(daysAgo(1));
+        taskRepository.save(completedLast);
+        taskRepository.save(completedFirst);
+
+        assertThat(performListAndParse(get("/tasks").param("status", "COMPLETED"))).extracting(TaskResponse::id)
+                .containsExactly(completedLast.getId(), completedFirst.getId());
+    }
+
+    @Test
     void listWithInvalidStatusReturns400() throws Exception {
         mockMvc.perform(get("/tasks").param("status", "NOT_A_STATUS"))
                 .andExpect(status().isBadRequest());
@@ -146,6 +180,10 @@ class TaskReadApiTest {
                 .getContentAsString();
         return objectMapper.readValue(body,
                 objectMapper.getTypeFactory().constructCollectionType(List.class, TaskResponse.class));
+    }
+
+    private Clock daysAgo(int days) {
+        return Clock.offset(clock, Duration.ofDays(-days));
     }
 
     private OffsetDateTime inDaysAt(int days, int hour) {

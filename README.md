@@ -46,7 +46,9 @@ JUnit 5 · AssertJ · Mockito · Testcontainers
 - **`deadline`** (date): when it should be done. It never affects actionability.
 - **Agenda** (`/agenda/today`): unfinished tasks whose `scheduledFor` local date is today or
   earlier, or whose `deadline` is today or earlier. Past days roll over until handled. A plain
-  `ACTIVE` task with no schedule or deadline does not appear.
+  `ACTIVE` task with no schedule or deadline does not appear. Ordered most time-critical first:
+  missed deadlines, missed schedules, due today, due within 3 days, then by scheduled time
+  (dates only — no importance or scoring; see `docs/V1-DESIGN.md` §30).
 - **Recommendations** (`/recommendations`): `ACTIVE` tasks only, optionally limited to those with
   a known duration ≤ `availableMinutes`, ranked by a deterministic score
   (`importance × 10` + bounded deadline-urgency points + age capped at 5) with a fixed
@@ -62,7 +64,7 @@ JUnit 5 · AssertJ · Mockito · Testcontainers
 |---|---|---|
 | `POST /tasks` | Create (status is derived, never sent) | `201` |
 | `GET /tasks/{id}` | Read one | `200` |
-| `GET /tasks[?status=ACTIVE\|SCHEDULED\|COMPLETED]` | List, optionally filtered | `200` |
+| `GET /tasks[?status=ACTIVE\|SCHEDULED\|COMPLETED]` | List, optionally filtered; newest first (`COMPLETED`: most recently completed first) | `200` |
 | `PATCH /tasks/{id}` | Partial update of `title`, `description`, `importance`, `estimatedDurationMinutes`, `deadline` | `200` |
 | `DELETE /tasks/{id}` | Hard delete | `204` |
 | `POST /tasks/{id}/complete` | `ACTIVE`/`SCHEDULED` → `COMPLETED` | `200` |

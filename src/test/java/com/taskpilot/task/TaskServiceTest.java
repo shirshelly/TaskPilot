@@ -92,27 +92,39 @@ class TaskServiceTest {
     }
 
     @Test
-    void listWithNoStatusReturnsAllTasks() {
+    void listWithNoStatusReturnsAllTasksNewestFirst() {
         TaskService taskService = new TaskService(taskRepository, CLOCK);
         Task task = Task.create("Task", null, null, null, null, null, CLOCK);
-        when(taskRepository.findAll()).thenReturn(List.of(task));
+        when(taskRepository.findAll(TaskService.NEWEST_FIRST)).thenReturn(List.of(task));
 
         List<Task> result = taskService.list(null);
 
         assertThat(result).containsExactly(task);
-        verify(taskRepository, never()).findByStatus(any());
+        verify(taskRepository, never()).findByStatus(any(), any());
     }
 
     @Test
-    void listWithStatusDelegatesToFindByStatus() {
+    void listWithAnOpenStatusDelegatesToFindByStatusNewestFirst() {
         TaskService taskService = new TaskService(taskRepository, CLOCK);
         Task task = Task.create("Task", null, null, null, null, null, CLOCK);
-        when(taskRepository.findByStatus(TaskStatus.ACTIVE)).thenReturn(List.of(task));
+        when(taskRepository.findByStatus(TaskStatus.ACTIVE, TaskService.NEWEST_FIRST)).thenReturn(List.of(task));
 
         List<Task> result = taskService.list(TaskStatus.ACTIVE);
 
         assertThat(result).containsExactly(task);
-        verify(taskRepository, never()).findAll();
+    }
+
+    @Test
+    void listOfCompletedTasksIsOrderedByCompletionTime() {
+        TaskService taskService = new TaskService(taskRepository, CLOCK);
+        Task task = Task.create("Task", null, null, null, null, null, CLOCK);
+        task.complete(CLOCK);
+        when(taskRepository.findByStatus(TaskStatus.COMPLETED, TaskService.RECENTLY_COMPLETED_FIRST))
+                .thenReturn(List.of(task));
+
+        List<Task> result = taskService.list(TaskStatus.COMPLETED);
+
+        assertThat(result).containsExactly(task);
     }
 
     @Test
