@@ -15,6 +15,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.sql.Timestamp;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -205,6 +206,45 @@ class TaskRepositoryTest {
         assertThat(taskRepository.findAgendaTasks(TODAY, START_OF_TOMORROW_IN_JERUSALEM))
                 .extracting(Task::getTitle)
                 .containsExactly("last minute of today");
+    }
+
+    // --- Activation candidates (§41), same Jerusalem bounds as above. ---
+
+    private static final Clock JERUSALEM_FIVE_DAYS_EARLIER = Clock.offset(JERUSALEM_NOON, Duration.ofDays(-5));
+
+    @Test
+    void dueScheduledTaskIdsAreScheduledTasksWhoseLocalDateIsTodayOrEarlier() {
+        // Created on Aug 20, so all of these are SCHEDULED at creation.
+        Task dueLaterToday = saveScheduledOnAug20(OffsetDateTime.parse("2026-08-25T18:00:00+03:00"));
+        Task overdue = saveScheduledOnAug20(OffsetDateTime.parse("2026-08-22T09:00:00+03:00"));
+        saveScheduledOnAug20(OffsetDateTime.parse("2026-08-26T09:00:00+03:00")); // future
+        // Old scheduledFor but no longer SCHEDULED: never a candidate.
+        Task active = Task.create("active", null, null, null, null, OffsetDateTime.parse("2026-08-22T09:00:00+03:00"), JERUSALEM_NOON);
+        taskRepository.saveAndFlush(active);
+        Task completed = Task.create("completed", null, null, null, null, OffsetDateTime.parse("2026-08-22T09:00:00+03:00"), JERUSALEM_NOON);
+        completed.complete(JERUSALEM_NOON);
+        taskRepository.saveAndFlush(completed);
+        entityManager.clear();
+
+        assertThat(taskRepository.findDueScheduledTaskIds(START_OF_TOMORROW_IN_JERUSALEM))
+                .containsExactlyInAnyOrder(dueLaterToday.getId(), overdue.getId());
+    }
+
+    @Test
+    void dueScheduledTaskIdsUseTheConfiguredZoneLocalDateNotTheUtcDate() {
+        Task lastMinuteOfToday = saveScheduledOnAug20(OffsetDateTime.parse("2026-08-25T20:59:00Z")); // 23:59 local
+        saveScheduledOnAug20(OffsetDateTime.parse("2026-08-25T21:00:00Z")); // local midnight Aug 26
+        saveScheduledOnAug20(OffsetDateTime.parse("2026-08-25T22:00:00Z")); // UTC Aug 25, local Aug 26
+        entityManager.clear();
+
+        assertThat(taskRepository.findDueScheduledTaskIds(START_OF_TOMORROW_IN_JERUSALEM))
+                .containsExactly(lastMinuteOfToday.getId());
+    }
+
+    private Task saveScheduledOnAug20(OffsetDateTime scheduledFor) {
+        Task task = Task.create("scheduled", null, null, null, null, scheduledFor, JERUSALEM_FIVE_DAYS_EARLIER);
+        assertThat(task.getStatus()).isEqualTo(TaskStatus.SCHEDULED);
+        return taskRepository.saveAndFlush(task);
     }
 
     private void saveTask(String title, LocalDate deadline, OffsetDateTime scheduledFor) {

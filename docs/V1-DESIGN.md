@@ -1429,6 +1429,30 @@ Task domain behavior
 TaskRepository
 ```
 
+### Cadence (V1 operational decision)
+
+Spring's built-in scheduling with a **fixed delay of 5 minutes** (`app.activation.fixed-delay`,
+default `PT5M`). The first run happens right after startup.
+
+- normal activation delay is at most ~5 minutes after the local date changes
+- recovery after downtime or a failed run is automatic: every run re-evaluates `<= today`
+- no dependency on an exact midnight execution
+- fixed delay (not fixed rate), so runs never overlap
+
+`app.activation.enabled` (default `true`) turns the scheduled trigger off; automated tests
+disable it so no background run can interfere with deterministic tests.
+
+### Run structure
+
+```text
+query IDs of due SCHEDULED tasks (scheduledFor < start of tomorrow in the configured zone)
+↓
+for each ID, in its own transaction:
+    reload → skip if deleted or no longer due (Task.isDueForActivation) → task.activate(now)
+```
+
+A per-task optimistic-lock conflict skips only that task (§42). Each run logs one INFO summary.
+
 ---
 
 ## 42. Transaction Boundaries

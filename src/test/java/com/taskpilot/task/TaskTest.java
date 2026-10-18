@@ -332,6 +332,47 @@ class TaskTest {
             assertThatThrownBy(() -> completed.activate(clockOnToday())).isInstanceOf(TaskStateException.class);
         }
 
+        @Test
+        void isDueForActivationOnlyForScheduledTasksWhoseLocalDateHasArrived() {
+            Task dueLaterToday = createScheduledTaskWithScheduledFor(at(TODAY, 18));
+            Task dueYesterday = createScheduledTaskWithScheduledFor(at(TODAY.minusDays(1), 9));
+            Task dueTomorrow = Task.create("Task", null, null, null, null, at(TODAY.plusDays(1), 0), clockOnToday());
+            Task active = Task.create("Task", null, null, null, null, at(TODAY.minusDays(1), 9), clockOnToday());
+            Task completed = createScheduledTaskWithScheduledFor(at(TODAY.minusDays(1), 9));
+            completed.complete(clockOnToday());
+
+            assertThat(dueLaterToday.isDueForActivation(clockOnToday())).isTrue();
+            assertThat(dueYesterday.isDueForActivation(clockOnToday())).isTrue();
+            assertThat(dueTomorrow.isDueForActivation(clockOnToday())).isFalse();
+            assertThat(active.isDueForActivation(clockOnToday())).isFalse();
+            assertThat(completed.isDueForActivation(clockOnToday())).isFalse();
+        }
+
+        @Test
+        void isDueForActivationUsesTheConfiguredZoneLocalDate() {
+            // Noon Aug 25 in Jerusalem. 22:00Z is still Aug 25 in UTC but 01:00 Aug 26 locally: not due yet.
+            Clock jerusalemNoon = Clock.fixed(Instant.parse("2026-08-25T09:00:00Z"), JERUSALEM);
+            Task task = Task.create("Task", null, null, null, null, OffsetDateTime.parse("2026-08-25T22:00:00Z"), jerusalemNoon);
+            assertThat(task.getStatus()).isEqualTo(TaskStatus.SCHEDULED);
+
+            assertThat(task.isDueForActivation(jerusalemNoon)).isFalse();
+            assertThatThrownBy(() -> task.activate(jerusalemNoon)).isInstanceOf(TaskStateException.class);
+        }
+
+        @Test
+        void activationSetsUpdatedAtFromTheClockAndPreservesScheduledFor() {
+            OffsetDateTime yesterday = at(TODAY.minusDays(1), 9);
+            Task task = createScheduledTaskWithScheduledFor(yesterday);
+            Clock activationClock = Clock.offset(clockOnToday(), Duration.ofHours(2));
+
+            task.activate(activationClock);
+
+            assertThat(task.getStatus()).isEqualTo(TaskStatus.ACTIVE);
+            assertThat(task.getUpdatedAt()).isEqualTo(activationClock.instant());
+            assertThat(task.getScheduledFor()).isEqualTo(yesterday);
+            assertThat(task.getCompletedAt()).isNull();
+        }
+
         private Task createScheduledTaskWithScheduledFor(OffsetDateTime scheduledFor) {
             // Build it as SCHEDULED via a clock in the past relative to scheduledFor, then
             // observe it from "today" to test activate() independently of creation-time status.

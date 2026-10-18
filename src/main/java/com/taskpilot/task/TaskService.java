@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -91,6 +92,22 @@ public class TaskService {
         Task task = findOrThrow(id);
         task.schedule(scheduledFor, clock);
         return task;
+    }
+
+    /**
+     * Activation use case for the scheduled worker (§41), one transaction per task. Re-evaluates
+     * the row's current state: a candidate deleted, completed, or rescheduled into the future since
+     * the worker's query is skipped (false), never overwritten. A concurrent change after this
+     * reload surfaces at commit as an optimistic-locking failure for the caller to handle.
+     */
+    @Transactional
+    public boolean activateIfDue(UUID id) {
+        Optional<Task> candidate = taskRepository.findById(id);
+        if (candidate.isEmpty() || !candidate.get().isDueForActivation(clock)) {
+            return false;
+        }
+        candidate.get().activate(clock);
+        return true;
     }
 
     @Transactional

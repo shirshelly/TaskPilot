@@ -26,4 +26,16 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
             """)
     List<Task> findAgendaTasks(@Param("today") LocalDate today,
                                @Param("startOfTomorrow") OffsetDateTime startOfTomorrow);
+
+    /**
+     * Activation candidates (§41): SCHEDULED with scheduledFor's local date <= today, using the
+     * same start-of-tomorrow bound as Agenda. Served by idx_tasks_status_scheduled_for. IDs only:
+     * the worker reloads each candidate in its own transaction.
+     */
+    @Query("""
+            select t.id from Task t
+            where t.status = com.taskpilot.task.TaskStatus.SCHEDULED
+              and t.scheduledFor < :startOfTomorrow
+            """)
+    List<UUID> findDueScheduledTaskIds(@Param("startOfTomorrow") OffsetDateTime startOfTomorrow);
 }

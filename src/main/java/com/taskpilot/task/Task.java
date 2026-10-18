@@ -155,13 +155,23 @@ public class Task {
         if (scheduledFor == null) {
             throw new IllegalStateException("Scheduled task is missing scheduledFor");
         }
-        LocalDate today = LocalDate.now(clock);
-        if (localDateOf(scheduledFor, clock).isAfter(today)) {
+        if (!isDueForActivation(clock)) {
             throw new TaskStateException("Task is not due yet");
         }
         this.status = TaskStatus.ACTIVE;
         this.updatedAt = clock.instant();
         // scheduledFor is intentionally preserved after activation (§7).
+    }
+
+    /**
+     * The single definition of "due" (§41): SCHEDULED and scheduledFor's local date is today or
+     * earlier. Lets the worker skip a candidate that changed since it was queried, without using
+     * exceptions for an expected condition; activate() stays strict and relies on the same rule.
+     */
+    public boolean isDueForActivation(Clock clock) {
+        return status == TaskStatus.SCHEDULED
+                && scheduledFor != null
+                && !localDateOf(scheduledFor, clock).isAfter(LocalDate.now(clock));
     }
 
     public boolean isOverdue(Clock clock) {

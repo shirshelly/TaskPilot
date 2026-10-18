@@ -10,6 +10,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -215,6 +216,59 @@ class TaskServiceTest {
 
         assertThatThrownBy(() -> taskService.update(id, new UpdateTaskRequest()))
                 .isInstanceOf(TaskNotFoundException.class);
+    }
+
+    @Test
+    void activateIfDueActivatesACurrentlyDueScheduledTask() {
+        Task task = scheduledOnAug20For(TODAY.minusDays(1));
+        TaskService taskService = new TaskService(taskRepository, CLOCK);
+        when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
+
+        assertThat(taskService.activateIfDue(task.getId())).isTrue();
+        assertThat(task.getStatus()).isEqualTo(TaskStatus.ACTIVE);
+        assertThat(task.getUpdatedAt()).isEqualTo(CLOCK.instant());
+    }
+
+    @Test
+    void activateIfDueSkipsACandidateRescheduledIntoTheFuture() {
+        Task task = scheduledOnAug20For(TODAY.plusDays(3));
+        Instant updatedAtBefore = task.getUpdatedAt();
+        TaskService taskService = new TaskService(taskRepository, CLOCK);
+        when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
+
+        assertThat(taskService.activateIfDue(task.getId())).isFalse();
+        assertThat(task.getStatus()).isEqualTo(TaskStatus.SCHEDULED);
+        assertThat(task.getUpdatedAt()).isEqualTo(updatedAtBefore);
+    }
+
+    @Test
+    void activateIfDueLeavesACandidateThatIsNoLongerScheduledUntouched() {
+        Task completed = scheduledOnAug20For(TODAY.minusDays(1));
+        completed.complete(CLOCK);
+        Instant updatedAtBefore = completed.getUpdatedAt();
+        TaskService taskService = new TaskService(taskRepository, CLOCK);
+        when(taskRepository.findById(completed.getId())).thenReturn(Optional.of(completed));
+
+        assertThat(taskService.activateIfDue(completed.getId())).isFalse();
+        assertThat(completed.getStatus()).isEqualTo(TaskStatus.COMPLETED);
+        assertThat(completed.getUpdatedAt()).isEqualTo(updatedAtBefore);
+    }
+
+    @Test
+    void activateIfDueSkipsADeletedCandidateWithoutThrowing() {
+        TaskService taskService = new TaskService(taskRepository, CLOCK);
+        UUID id = UUID.randomUUID();
+        when(taskRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThat(taskService.activateIfDue(id)).isFalse();
+    }
+
+    private static Task scheduledOnAug20For(LocalDate scheduledDate) {
+        Clock aug20 = Clock.offset(CLOCK, Duration.ofDays(-5));
+        Task task = Task.create("Task", null, null, null, null,
+                scheduledDate.atTime(9, 0).atOffset(ZoneOffset.UTC), aug20);
+        assertThat(task.getStatus()).isEqualTo(TaskStatus.SCHEDULED);
+        return task;
     }
 
     @Test

@@ -1,5 +1,8 @@
 app:
   zone-id: ${APP_ZONE_ID:Asia/Jerusalem}
+  activation:
+    enabled: ${APP_ACTIVATION_ENABLED:true}
+    fixed-delay: ${APP_ACTIVATION_FIXED_DELAY:PT5M}
 
 spring:
   application:

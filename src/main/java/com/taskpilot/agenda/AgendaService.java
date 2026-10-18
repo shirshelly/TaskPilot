@@ -1,5 +1,6 @@
 package com.taskpilot.agenda;
 
+import com.taskpilot.common.DayBoundaries;
 import com.taskpilot.task.Task;
 import com.taskpilot.task.TaskRepository;
 import org.springframework.stereotype.Service;
@@ -7,7 +8,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
@@ -27,9 +27,6 @@ public class AgendaService {
 
     @Transactional(readOnly = true)
     public List<Task> today() {
-        LocalDate today = LocalDate.now(clock);
-        // "local date <= today" in the configured zone == "instant before local midnight tomorrow".
-        OffsetDateTime startOfTomorrow = today.plusDays(1).atStartOfDay(clock.getZone()).toOffsetDateTime();
-        return taskRepository.findAgendaTasks(today, startOfTomorrow);
+        return taskRepository.findAgendaTasks(LocalDate.now(clock), DayBoundaries.startOfTomorrow(clock));
     }
 }
