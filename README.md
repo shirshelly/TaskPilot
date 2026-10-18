@@ -123,6 +123,37 @@ Configuration (environment variables, defaults in `application.yml`):
 | `APP_ACTIVATION_ENABLED` | `true` |
 | `APP_ACTIVATION_FIXED_DELAY` | `PT5M` |
 
+## Frontend (in progress)
+
+A React + TypeScript app in [`frontend/`](frontend), built separately from the backend
+(Vite, Tailwind CSS, shadcn/ui, TanStack Query, React Router). It is currently **read-only**:
+Today (Agenda + Focus recommendations with an available-time filter) and Tasks (status filters).
+
+**Prerequisites:** Node.js 22+ and the backend running on `localhost:8080`.
+
+```bash
+cd frontend
+npm install
+npm run dev        # http://localhost:5173
+```
+
+The dev server proxies `/api/*` to Spring Boot with the prefix stripped, so the backend needs no
+CORS configuration (`TASKPILOT_API_URL` overrides the target). The UI reads the application
+timezone from `GET /app-info` and uses it for every date it shows or builds.
+
+```bash
+npm test           # Vitest: time/DST helpers, error normalisation, URL state, components
+npm run typecheck
+npm run build
+```
+
+To try the UI without touching your normal data, point the backend at a separate database:
+
+```bash
+docker exec taskpilot-postgres createdb -U taskpilot taskpilot_dev
+DB_URL=jdbc:postgresql://localhost:5432/taskpilot_dev ./mvnw spring-boot:run
+```
+
 ## Testing
 
 ```bash
@@ -145,7 +176,7 @@ fixed `Clock`.
 
 ## Not in V1 / Roadmap
 
-Intentionally out of scope for V1 and **not implemented**: UI, authentication / multi-user,
+Intentionally out of scope for V1 and **not implemented**: authentication / multi-user,
 recurring tasks, dependencies, automatic schedule generation, calendar integration, persistent
 history/analytics, and any AI features. Future phases are described at the end of
 `docs/V1-DESIGN.md`; optional AI capabilities (natural-language task capture, a tool-calling
