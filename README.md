@@ -23,7 +23,8 @@ JUnit 5 · AssertJ · Mockito · Testcontainers
   invariants with `CHECK` constraints (e.g. `COMPLETED ⇔ completed_at IS NOT NULL`).
 - **Explicit transaction boundaries** in the service layer, using JPA dirty checking.
 - **Optimistic locking** (`@Version`): a stale API write returns `409`; in the background worker it
-  skips only the affected task.
+  skips only the affected task. `PATCH` also accepts `If-Match: "<version>"`, so an edit based on
+  an outdated read is refused with `412` before anything is applied.
 - **Timezone-aware date semantics.** All time logic uses an injected `Clock` and one configured
   zone (`app.zone-id`). Date-based queries compare `TIMESTAMPTZ` values against zone-derived
   instant bounds, so results never depend on the JVM or database session timezone.
