@@ -966,6 +966,30 @@ unknown or lifecycle property (e.g. status) → 400 (rejected, never silently ig
 any invalid supplied value                  → 400, and no field of the request is applied
 ```
 
+### Conditional update (If-Match)
+
+PATCH accepts an optional `If-Match` header carrying the task `version` the client last read
+(exposed in `TaskResponse`, §32) as a single strong entity tag, e.g. `If-Match: "3"`.
+
+```text
+no If-Match                       → unconditional, as above
+If-Match matches current version  → applied; response carries the new version
+If-Match names an older version   → 412 VERSION_CONFLICT, nothing applied
+malformed (unquoted, W/"3", *, list) → 400 VALIDATION_FAILED
+missing task                      → 404 TASK_NOT_FOUND (not 412: "deleted" is more useful)
+```
+
+Evaluation order follows the real request flow. The body is bound by Jackson before the
+controller runs, so an unreadable body (unknown/lifecycle property, wrong JSON type) is a 400
+regardless of If-Match. The controller then parses If-Match, and the service loads the task
+(404), compares versions (412), and only then applies fields, whose value rules live in the
+domain (400). PATCH has no `@Valid`, so e.g. a stale request with a blank title is a 412.
+
+This catches changes made while a user was editing, which `@Version` alone cannot: without a
+client-supplied version, the service reloads the current row and a stale edit silently wins.
+Lifecycle commands (complete/reopen/schedule/delete) do not take If-Match in V1; they are
+guarded by task state.
+
 ---
 
 ## 25. POST /tasks/{id}/schedule
@@ -1251,9 +1275,11 @@ createdAt
 updatedAt
 completedAt
 isOverdue
+version
 ```
 
-`isOverdue` is computed and is not a database column.
+`isOverdue` is computed and is not a database column. `version` is the optimistic-locking
+version (§17), exposed so clients can make conditional updates (§24).
 
 ---
 
@@ -1309,6 +1335,7 @@ VALIDATION_FAILED          400               TaskValidationException; Spring MVC
                                              @Valid / method-validation and type-conversion errors
 TASK_NOT_FOUND             404               TaskNotFoundException
 INVALID_STATE_TRANSITION   409               TaskStateException
+VERSION_CONFLICT           412               If-Match names a version that is no longer current (§24)
 VERSION_CONFLICT           409               optimistic-lock failure at commit (§42)
 REQUEST_NOT_SUPPORTED      other 4xx         unknown route, unsupported method / media type
 INTERNAL_ERROR             500               anything unhandled
@@ -1595,7 +1622,13 @@ stale write detected
 → 409 Conflict
 ```
 
-This is consistent with the existing invalid-state-transition mapping (§33).
+This is consistent with the existing invalid-state-transition mapping (§33); the `code`
+(`VERSION_CONFLICT` vs `INVALID_STATE_TRANSITION`) tells the two apart.
+
+When a PATCH carries `If-Match` (§24), the expected version is compared with the task loaded
+inside the update transaction, before any field is applied → `412` on mismatch. A write
+committed by another transaction between that check and our commit is still caught by
+`@Version` at flush → `409`. Both carry `VERSION_CONFLICT`; clients branch on the code.
 
 For the scheduled worker:
 

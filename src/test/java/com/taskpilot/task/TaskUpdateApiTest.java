@@ -3,11 +3,14 @@ package com.taskpilot.task;
 import com.taskpilot.FixedClockTestConfiguration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -193,6 +196,101 @@ class TaskUpdateApiTest {
                         {"title": "Anything"}
                         """))
                 .andExpect(status().isNotFound());
+    }
+
+    // --- conditional PATCH (If-Match, §24 / §42) ---
+
+    @Test
+    void ifMatchWithTheCurrentVersionAppliesAndReturnsTheNewVersion() throws Exception {
+        Task before = seedScheduledTaskWithAllFields();
+
+        mockMvc.perform(patchTask(before.getId(), """
+                        {"title": "New title"}
+                        """).header(HttpHeaders.IF_MATCH, versionTag(before.getVersion())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("New title"))
+                .andExpect(jsonPath("$.version").value((int) before.getVersion() + 1));
+
+        assertThat(reload(before).getVersion()).isEqualTo(before.getVersion() + 1);
+    }
+
+    @Test
+    void staleIfMatchReturns412AndAppliesNothing() throws Exception {
+        Task original = seedScheduledTaskWithAllFields();
+        mockMvc.perform(patchTask(original.getId(), """
+                        {"description": "Changed elsewhere"}
+                        """))
+                .andExpect(status().isOk());
+        Task current = reload(original);
+
+        mockMvc.perform(patchTask(original.getId(), """
+                        {"title": "Based on a stale read"}
+                        """).header(HttpHeaders.IF_MATCH, versionTag(original.getVersion())))
+                .andExpect(status().isPreconditionFailed())
+                .andExpect(jsonPath("$.code").value("VERSION_CONFLICT"));
+
+        assertRowUnchanged(current);
+        assertThat(reload(original).getDescription()).isEqualTo("Changed elsewhere");
+    }
+
+    @Test
+    void versionIsCheckedBeforeDomainValidation() throws Exception {
+        Task original = seedScheduledTaskWithAllFields();
+        bumpVersion(original);
+
+        // Blank title is a domain rule (no @Valid on PATCH), evaluated after the version check.
+        mockMvc.perform(patchTask(original.getId(), """
+                        {"title": "   "}
+                        """).header(HttpHeaders.IF_MATCH, versionTag(original.getVersion())))
+                .andExpect(status().isPreconditionFailed())
+                .andExpect(jsonPath("$.code").value("VERSION_CONFLICT"));
+    }
+
+    @Test
+    void unreadableBodyIsRejectedBeforeTheVersionCheck() throws Exception {
+        Task original = seedScheduledTaskWithAllFields();
+        bumpVersion(original);
+
+        // Body binding happens before the controller method runs, so this never reaches the check.
+        mockMvc.perform(patchTask(original.getId(), """
+                        {"status": "COMPLETED"}
+                        """).header(HttpHeaders.IF_MATCH, versionTag(original.getVersion())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"0", "W/\"0\"", "*", "\"0\", \"1\"", "\"abc\"", "\"\""})
+    void malformedIfMatchReturns400AndAppliesNothing(String ifMatch) throws Exception {
+        Task before = seedScheduledTaskWithAllFields();
+
+        mockMvc.perform(patchTask(before.getId(), """
+                        {"title": "Would be renamed"}
+                        """).header(HttpHeaders.IF_MATCH, ifMatch))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        assertRowUnchanged(before);
+    }
+
+    @Test
+    void ifMatchOnAMissingTaskReturns404() throws Exception {
+        mockMvc.perform(patchTask(UUID.randomUUID(), """
+                        {"title": "Anything"}
+                        """).header(HttpHeaders.IF_MATCH, "\"0\""))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("TASK_NOT_FOUND"));
+    }
+
+    private void bumpVersion(Task task) throws Exception {
+        mockMvc.perform(patchTask(task.getId(), """
+                        {"importance": 4}
+                        """))
+                .andExpect(status().isOk());
+    }
+
+    private static String versionTag(long version) {
+        return "\"" + version + "\"";
     }
 
     private Task seedScheduledTaskWithAllFields() {

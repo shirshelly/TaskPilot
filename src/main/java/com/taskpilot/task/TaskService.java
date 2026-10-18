@@ -57,9 +57,18 @@ public class TaskService {
                 status == TaskStatus.COMPLETED ? RECENTLY_COMPLETED_FIRST : NEWEST_FIRST);
     }
 
+    /**
+     * @param expectedVersion the version the client last read (If-Match), or null for no check.
+     *        Compared against the task loaded in this transaction, before any field is applied, so
+     *        a stale request changes nothing. A write committed by another transaction between this
+     *        check and our commit is still caught by @Version at flush (§42).
+     */
     @Transactional
-    public Task update(UUID id, UpdateTaskRequest request) {
+    public Task update(UUID id, UpdateTaskRequest request, Long expectedVersion) {
         Task task = findOrThrow(id);
+        if (expectedVersion != null && task.getVersion() != expectedVersion) {
+            throw new TaskVersionMismatchException(id, expectedVersion);
+        }
         // Only fields present in the request are applied; an empty PATCH touches nothing,
         // so updatedAt/version stay put. Any validation failure rolls back every field.
         if (request.hasTitle()) {

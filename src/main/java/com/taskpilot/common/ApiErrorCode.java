@@ -3,7 +3,8 @@ package com.taskpilot.common;
 /**
  * Stable, machine-readable error codes carried in every Problem Details response as the
  * {@code code} property (§33). Clients branch on these, not on HTTP status or message text:
- * VERSION_CONFLICT, for example, arrives as 412 or 409 depending on where it was detected.
+ * VERSION_CONFLICT, for example, arrives as 412 (failed If-Match) or 409 (optimistic-lock failure
+ * at commit) depending on where it was detected.
  */
 public enum ApiErrorCode {
     VALIDATION_FAILED,

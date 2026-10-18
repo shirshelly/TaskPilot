@@ -72,7 +72,8 @@ class TaskReadApiTest {
                 .andExpect(jsonPath("$.title").value("Buy plant"))
                 .andExpect(jsonPath("$.description").value("For the desk"))
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
-                .andExpect(jsonPath("$.importance").value(4));
+                .andExpect(jsonPath("$.importance").value(4))
+                .andExpect(jsonPath("$.version").value((int) task.getVersion()));
     }
 
     @Test

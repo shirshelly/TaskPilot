@@ -3,6 +3,7 @@ package com.taskpilot.common;
 import com.taskpilot.task.TaskNotFoundException;
 import com.taskpilot.task.TaskStateException;
 import com.taskpilot.task.TaskValidationException;
+import com.taskpilot.task.TaskVersionMismatchException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -44,6 +45,13 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(TaskValidationException.class)
     ProblemDetail handleDomainValidation(TaskValidationException ex) {
         return problem(HttpStatus.BAD_REQUEST, ApiErrorCode.VALIDATION_FAILED, ex.getMessage());
+    }
+
+    // If-Match named a version that is no longer current: the client's precondition failed before
+    // anything was applied. Same code as the commit-time conflict below; only the status differs.
+    @ExceptionHandler(TaskVersionMismatchException.class)
+    ProblemDetail handleVersionMismatch(TaskVersionMismatchException ex) {
+        return problem(HttpStatus.PRECONDITION_FAILED, ApiErrorCode.VERSION_CONFLICT, ex.getMessage());
     }
 
     // Stale @Version write detected at flush/commit (§42). Spring translates Hibernate's

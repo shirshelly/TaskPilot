@@ -3,8 +3,10 @@ package com.taskpilot.common;
 import com.taskpilot.task.Task;
 import com.taskpilot.task.TaskController;
 import com.taskpilot.task.TaskService;
+import com.taskpilot.task.TaskVersionMismatchException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.web.servlet.MockMvc;
@@ -14,9 +16,12 @@ import java.time.Clock;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -52,6 +57,19 @@ class ApiExceptionHandlerTest {
                 .andExpect(status().isConflict())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.code").value("VERSION_CONFLICT"));
+    }
+
+    @Test
+    void failedIfMatchPreconditionMapsTo412VersionConflict() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(taskService.update(eq(id), any(), eq(3L))).thenThrow(new TaskVersionMismatchException(id, 3));
+
+        mockMvc.perform(patch("/tasks/{id}", id)
+                        .header(HttpHeaders.IF_MATCH, "\"3\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\": \"New\"}"))
+                .andExpect(status().isPreconditionFailed())
                 .andExpect(jsonPath("$.code").value("VERSION_CONFLICT"));
     }
 

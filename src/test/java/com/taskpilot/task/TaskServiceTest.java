@@ -184,7 +184,7 @@ class TaskServiceTest {
         request.setTitle("New title");
         request.setDeadline(null);
 
-        Task result = taskService.update(task.getId(), request);
+        Task result = taskService.update(task.getId(), request, null);
 
         assertThat(result.getTitle()).isEqualTo("New title");
         assertThat(result.getDeadline()).isNull();
@@ -201,7 +201,7 @@ class TaskServiceTest {
         TaskService taskService = new TaskService(taskRepository, CLOCK);
         when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
 
-        Task result = taskService.update(task.getId(), new UpdateTaskRequest());
+        Task result = taskService.update(task.getId(), new UpdateTaskRequest(), null);
 
         assertThat(result.getUpdatedAt()).isEqualTo(creationClock.instant());
         assertThat(result.getDescription()).isEqualTo("Notes");
@@ -215,9 +215,37 @@ class TaskServiceTest {
         UpdateTaskRequest request = new UpdateTaskRequest();
         request.setImportance(null);
 
-        assertThatThrownBy(() -> taskService.update(task.getId(), request))
+        assertThatThrownBy(() -> taskService.update(task.getId(), request, null))
                 .isInstanceOf(TaskValidationException.class);
         assertThat(task.getImportance()).isEqualTo(4);
+    }
+
+    @Test
+    void updateWithAStaleExpectedVersionThrowsBeforeApplyingAnyField() {
+        Clock creationClock = Clock.offset(CLOCK, Duration.ofDays(-1));
+        Task task = Task.create("Old title", null, null, null, null, null, creationClock);
+        TaskService taskService = new TaskService(taskRepository, CLOCK);
+        when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
+        UpdateTaskRequest request = new UpdateTaskRequest();
+        request.setTitle("New title");
+
+        assertThatThrownBy(() -> taskService.update(task.getId(), request, task.getVersion() + 1))
+                .isInstanceOf(TaskVersionMismatchException.class);
+        assertThat(task.getTitle()).isEqualTo("Old title");
+        assertThat(task.getUpdatedAt()).isEqualTo(creationClock.instant());
+    }
+
+    @Test
+    void updateWithTheCurrentExpectedVersionApplies() {
+        Task task = Task.create("Old title", null, null, null, null, null, CLOCK);
+        TaskService taskService = new TaskService(taskRepository, CLOCK);
+        when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
+        UpdateTaskRequest request = new UpdateTaskRequest();
+        request.setTitle("New title");
+
+        Task result = taskService.update(task.getId(), request, task.getVersion());
+
+        assertThat(result.getTitle()).isEqualTo("New title");
     }
 
     @Test
@@ -226,7 +254,7 @@ class TaskServiceTest {
         UUID id = UUID.randomUUID();
         when(taskRepository.findById(id)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> taskService.update(id, new UpdateTaskRequest()))
+        assertThatThrownBy(() -> taskService.update(id, new UpdateTaskRequest(), null))
                 .isInstanceOf(TaskNotFoundException.class);
     }
 
