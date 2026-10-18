@@ -17,12 +17,14 @@ export function TimeFilter({ minutes, onChange }: { minutes: number | null; onCh
   const groupValue = minutes === null ? 'any' : custom ? '' : String(minutes)
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="shrink-0 text-sm text-muted-foreground">I have</span>
-      <div className="no-scrollbar -mx-1 flex min-w-0 items-center gap-1.5 overflow-x-auto px-1 py-1">
+    // Wraps rather than scrolling sideways: every option stays visible on a phone.
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+      <span className="text-sm text-muted-foreground">I have</span>
+      <div className="flex flex-wrap items-center gap-1.5">
         <ToggleGroup
           type="single"
           spacing={1.5}
+          className="flex-wrap"
           aria-label="Available time"
           value={groupValue}
           onValueChange={(value) => {

@@ -26,8 +26,8 @@ export function TodayPage() {
       </header>
 
       <div className="grid gap-12 lg:grid-cols-12 lg:gap-16">
-        <AgendaSection className="lg:col-span-7" />
-        <FocusPanel className="lg:sticky lg:top-24 lg:col-span-5 lg:self-start" />
+        <AgendaSection className="min-w-0 lg:col-span-7" />
+        <FocusPanel className="min-w-0 lg:sticky lg:top-24 lg:col-span-5 lg:self-start" />
       </div>
     </>
   )
