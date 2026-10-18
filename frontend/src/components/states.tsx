@@ -98,3 +98,32 @@ export function SectionHeader({
     </div>
   )
 }
+
+/** Inline message inside a form or sheet (errors, conflicts, notices). */
+export function InlineAlert({
+  tone = 'error',
+  title,
+  children,
+  action,
+}: {
+  tone?: 'error' | 'warning' | 'info'
+  title: string
+  children?: ReactNode
+  action?: ReactNode
+}) {
+  return (
+    <div
+      role={tone === 'info' ? 'status' : 'alert'}
+      className={cn(
+        'rounded-lg border px-3.5 py-3 text-sm',
+        tone === 'error' && 'border-destructive/25 bg-destructive/5',
+        tone === 'warning' && 'border-amber-300/70 bg-amber-50',
+        tone === 'info' && 'border-border bg-muted/60',
+      )}
+    >
+      <p className="font-medium">{title}</p>
+      {children && <div className="mt-1 text-muted-foreground">{children}</div>}
+      {action && <div className="mt-3 flex flex-wrap gap-2">{action}</div>}
+    </div>
+  )
+}

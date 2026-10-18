@@ -1,7 +1,10 @@
 import { useEffect } from 'react'
 import { useSearchParams } from 'react-router'
+import { Plus } from 'lucide-react'
+import { useTaskOverlays } from '@/app/taskOverlays'
 import { useDocumentTitle } from '@/app/useDocumentTitle'
 import { EmptyState, ErrorState, ListSkeleton, RefreshFailedNote } from '@/components/states'
+import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
   DEFAULT_TASK_FILTER,
@@ -27,6 +30,7 @@ export function TasksPage() {
   const rawStatus = searchParams.get(STATUS_PARAM)
   const filter = parseTaskFilter(rawStatus) ?? DEFAULT_TASK_FILTER
   const query = useTasks(filter)
+  const { openCreate } = useTaskOverlays()
 
   const setFilter = (next: TaskFilter) =>
     setSearchParams(
@@ -81,7 +85,17 @@ export function TasksPage() {
         ) : query.isError && !query.data ? (
           <ErrorState error={query.error} onRetry={() => void query.refetch()} />
         ) : query.data.length === 0 ? (
-          <EmptyState {...EMPTY_COPY[filter]} />
+          <EmptyState
+            {...EMPTY_COPY[filter]}
+            action={
+              filter !== 'completed' && (
+                <Button variant="outline" size="sm" onClick={openCreate}>
+                  <Plus aria-hidden="true" />
+                  New task
+                </Button>
+              )
+            }
+          />
         ) : (
           <ul className="divide-y divide-border/70 border-y border-border/70">
             {query.data.map((task) => (

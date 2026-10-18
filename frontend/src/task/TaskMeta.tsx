@@ -8,6 +8,7 @@ import {
   formatDuration,
   formatSchedule,
   importanceLabel,
+  inSentence,
 } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -33,7 +34,7 @@ export function TaskMeta({ task, showStatus = false, className }: { task: Task; 
     const label = formatSchedule(task.scheduledFor, zone, today)
     items.push(
       <Item key="start" icon={<CalendarClock />} title="Start on">
-        {task.status === 'SCHEDULED' ? `Starts ${lowerFirst(label)}` : label}
+        {task.status === 'SCHEDULED' ? `Starts ${inSentence(label)}` : label}
       </Item>,
     )
   }
@@ -68,10 +69,4 @@ function Item({ icon, title, children }: { icon: ReactNode; title?: string; chil
       {children}
     </span>
   )
-}
-
-function lowerFirst(label: string): string {
-  return label === 'Today' || label === 'Tomorrow' || label.startsWith('Today ') || label.startsWith('Tomorrow ')
-    ? label.charAt(0).toLowerCase() + label.slice(1)
-    : label
 }

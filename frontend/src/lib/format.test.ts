@@ -6,6 +6,7 @@ import {
   formatDeadline,
   formatDuration,
   formatSchedule,
+  inSentence,
 } from './format'
 
 const TODAY = '2026-10-21' // a Wednesday
@@ -46,5 +47,13 @@ describe('task labels', () => {
     expect(formatDuration(45)).toBe('45m')
     expect(formatDuration(60)).toBe('1h')
     expect(formatDuration(90)).toBe('1h 30m')
+  })
+})
+
+describe('inSentence', () => {
+  it('lowercases only leading relative words', () => {
+    expect(inSentence('Tomorrow')).toBe('tomorrow')
+    expect(inSentence('Today · 16:30')).toBe('today · 16:30')
+    expect(inSentence('Mon 26 Oct')).toBe('Mon 26 Oct')
   })
 })

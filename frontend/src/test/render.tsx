@@ -5,18 +5,27 @@ import { createMemoryRouter, RouterProvider } from 'react-router'
 import { vi } from 'vitest'
 import type { Task } from '@/api/types'
 import { AppTimeProvider } from '@/app/appTime'
+import { TaskOverlaysProvider } from '@/app/taskOverlays'
+import { Toaster } from 'sonner'
 
 export const TEST_ZONE = 'Asia/Jerusalem'
 
-/** Renders `ui` at `route` with a fresh query client (no retries) and the app-time context. */
+/**
+ * Renders `ui` at `route` the way AppShell does: fresh query client (no retries), app-time
+ * context, the task dialogs, and a toaster.
+ */
 export function renderWithApp(ui: ReactElement, { route = '/', zone = TEST_ZONE } = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const router = createMemoryRouter([{ path: '*', element: <AppTimeProvider zone={zone}>{ui}</AppTimeProvider> }], {
-    initialEntries: [route],
-  })
+  const element = (
+    <AppTimeProvider zone={zone}>
+      <TaskOverlaysProvider>{ui}</TaskOverlaysProvider>
+    </AppTimeProvider>
+  )
+  const router = createMemoryRouter([{ path: '*', element }], { initialEntries: [route] })
   const result = render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
+      <Toaster />
     </QueryClientProvider>,
   )
   return { ...result, router, queryClient }

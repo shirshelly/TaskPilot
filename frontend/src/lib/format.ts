@@ -31,8 +31,15 @@ export function formatCalendarDate(date: IsoDate, today: IsoDate): string {
   return dayMonthShort.format(value)
 }
 
-const lowerRelative = (label: string) =>
-  label === 'Today' || label === 'Tomorrow' || label === 'Yesterday' ? label.toLowerCase() : label
+/** "Mon 26 Oct", without relative words. */
+export function formatShortDate(date: IsoDate): string {
+  return dayMonthShort.format(asUtcDate(date))
+}
+
+/** For use mid-sentence: "Today · 16:30" → "today · 16:30"; dates like "Mon 26 Oct" stay as they are. */
+export function inSentence(label: string): string {
+  return /^(Today|Tomorrow|Yesterday)\b/.test(label) ? label.charAt(0).toLowerCase() + label.slice(1) : label
+}
 
 /** Start-on label: the date, plus the time unless it's the date-only convention. */
 export function formatSchedule(scheduledFor: string, zone: string, today: IsoDate): string {
@@ -42,11 +49,11 @@ export function formatSchedule(scheduledFor: string, zone: string, today: IsoDat
 }
 
 export function formatDeadline(deadline: IsoDate, today: IsoDate): string {
-  return `Due ${lowerRelative(formatCalendarDate(deadline, today))}`
+  return `Due ${inSentence(formatCalendarDate(deadline, today))}`
 }
 
 export function formatCompleted(completedAt: string, zone: string, today: IsoDate): string {
-  return `Done ${lowerRelative(formatCalendarDate(zonedParts(completedAt, zone).date, today))}`
+  return `Done ${inSentence(formatCalendarDate(zonedParts(completedAt, zone).date, today))}`
 }
 
 export function formatDuration(minutes: number): string {

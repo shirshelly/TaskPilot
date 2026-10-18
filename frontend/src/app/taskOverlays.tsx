@@ -1,0 +1,90 @@
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import type { Task } from '@/api/types'
+import { DeleteTaskDialog } from '@/task/DeleteTaskDialog'
+import { EditTaskSheet } from '@/task/EditTaskSheet'
+import { QuickCreateDialog } from '@/task/QuickCreateDialog'
+import { ScheduleDialog } from '@/task/ScheduleDialog'
+
+interface TaskOverlays {
+  openCreate: () => void
+  openEdit: (task: Task) => void
+  openSchedule: (task: Task) => void
+  openDelete: (task: Task) => void
+}
+
+const TaskOverlaysContext = createContext<TaskOverlays | null>(null)
+
+/**
+ * Remembers the last task even after closing, so the closing animation still has content;
+ * `session` changes on every open so each dialog starts from fresh local state.
+ */
+interface Overlay {
+  task: Task | null
+  open: boolean
+  session: number
+}
+
+const closed: Overlay = { task: null, open: false, session: 0 }
+
+function useOverlay() {
+  const [state, setState] = useState<Overlay>(closed)
+  const open = useCallback((task: Task | null) => setState((s) => ({ task, open: true, session: s.session + 1 })), [])
+  const setOpen = useCallback((next: boolean) => setState((s) => ({ ...s, open: next })), [])
+  return [state, open, setOpen] as const
+}
+
+/** Hosts the single instance of each task dialog; rows and pages open them through context. */
+export function TaskOverlaysProvider({ children }: { children: ReactNode }) {
+  const [create, openCreate, setCreateOpen] = useOverlay()
+  const [edit, openEdit, setEditOpen] = useOverlay()
+  const [schedule, openSchedule, setScheduleOpen] = useOverlay()
+  const [remove, openDelete, setDeleteOpen] = useOverlay()
+
+  const value = useMemo<TaskOverlays>(
+    () => ({
+      openCreate: () => openCreate(null),
+      openEdit,
+      openSchedule,
+      openDelete,
+    }),
+    [openCreate, openEdit, openSchedule, openDelete],
+  )
+
+  return (
+    <TaskOverlaysContext.Provider value={value}>
+      {children}
+      <QuickCreateDialog key={`create-${create.session}`} open={create.open} onOpenChange={setCreateOpen} />
+      {edit.task && (
+        <EditTaskSheet
+          key={`edit-${edit.session}`}
+          task={edit.task}
+          open={edit.open}
+          onOpenChange={setEditOpen}
+        />
+      )}
+      {schedule.task && (
+        <ScheduleDialog
+          key={`schedule-${schedule.session}`}
+          task={schedule.task}
+          open={schedule.open}
+          onOpenChange={setScheduleOpen}
+        />
+      )}
+      {remove.task && (
+        <DeleteTaskDialog
+          key={`delete-${remove.session}`}
+          task={remove.task}
+          open={remove.open}
+          onOpenChange={setDeleteOpen}
+        />
+      )}
+    </TaskOverlaysContext.Provider>
+  )
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function useTaskOverlays(): TaskOverlays {
+  const value = useContext(TaskOverlaysContext)
+  if (!value) throw new Error('useTaskOverlays must be used inside <TaskOverlaysProvider>')
+  return value
+}
