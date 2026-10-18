@@ -93,6 +93,15 @@ public class TaskService {
         return task;
     }
 
+    @Transactional
+    public void delete(UUID id) {
+        // Hard delete (§16). Not deleteById: it silently ignores a missing id, but a missing task
+        // must be a 404. Deleting the loaded, versioned entity also makes a concurrent modification
+        // fail as an optimistic-locking conflict instead of deleting a row we never saw.
+        Task task = findOrThrow(id);
+        taskRepository.delete(task);
+    }
+
     private Task findOrThrow(UUID id) {
         return taskRepository.findById(id)
                 .orElseThrow(() -> new TaskNotFoundException(id));

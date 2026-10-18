@@ -218,6 +218,27 @@ class TaskServiceTest {
     }
 
     @Test
+    void deleteRemovesTheLoadedTask() {
+        Task task = Task.create("Task", null, null, null, null, null, CLOCK);
+        TaskService taskService = new TaskService(taskRepository, CLOCK);
+        when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
+
+        taskService.delete(task.getId());
+
+        verify(taskRepository).delete(task);
+    }
+
+    @Test
+    void deleteOfAMissingTaskThrowsTaskNotFoundExceptionAndDeletesNothing() {
+        TaskService taskService = new TaskService(taskRepository, CLOCK);
+        UUID id = UUID.randomUUID();
+        when(taskRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> taskService.delete(id)).isInstanceOf(TaskNotFoundException.class);
+        verify(taskRepository, never()).delete(any(Task.class));
+    }
+
+    @Test
     void scheduleLoadsTheTaskAndSchedulesItUsingTheInjectedClock() {
         Clock earlierClock = Clock.offset(CLOCK, Duration.ofDays(-1));
         Task task = Task.create("Task", null, null, null, null, null, earlierClock);

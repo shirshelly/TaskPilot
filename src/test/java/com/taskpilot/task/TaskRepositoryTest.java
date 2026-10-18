@@ -139,6 +139,22 @@ class TaskRepositoryTest {
     }
 
     @Test
+    void deletingAStaleVersionedEntityIsDetectedAsAnOptimisticLockConflict() {
+        Task task = Task.create("Task", null, null, null, null, null, CLOCK);
+        taskRepository.saveAndFlush(task);
+        entityManager.clear();
+
+        // Mirrors TaskService.delete: entity loaded in this transaction, then another writer
+        // commits a change (bumping version) before our DELETE ... WHERE version = ? runs.
+        Task loaded = taskRepository.findById(task.getId()).orElseThrow();
+        jdbcTemplate.update("update tasks set version = version + 1 where id = ?", task.getId());
+
+        taskRepository.delete(loaded);
+        assertThatThrownBy(() -> taskRepository.flush())
+                .isInstanceOf(ObjectOptimisticLockingFailureException.class);
+    }
+
+    @Test
     void databaseRejectsImportanceOutsideValidRange() {
         assertThatThrownBy(() -> insertRawTask("ACTIVE", 6, null, null, null))
                 .isInstanceOf(DataAccessException.class);
