@@ -1,5 +1,6 @@
 import { keepPreviousData, QueryClient, useQuery } from '@tanstack/react-query'
-import { fetchAgenda, fetchAppInfo, fetchRecommendations, fetchTasks } from '@/api/endpoints'
+import { fetchAgenda, fetchAppInfo, fetchRecommendations, fetchTask, fetchTasks } from '@/api/endpoints'
+import type { Task } from '@/api/types'
 import { ApiError } from '@/api/errors'
 import { statusForFilter, type TaskFilter } from '@/lib/taskFilter'
 
@@ -12,6 +13,7 @@ export const queryKeys = {
   appInfo: ['app-info'] as const,
   root: ['tp'] as const,
   tasks: (filter: TaskFilter) => ['tp', 'tasks', filter] as const,
+  task: (id: string) => ['tp', 'task', id] as const,
   agenda: () => ['tp', 'agenda'] as const,
   recommendations: (minutes: number | null) => ['tp', 'recommendations', minutes ?? 'any'] as const,
 }
@@ -68,5 +70,19 @@ export function useTasks(filter: TaskFilter) {
     queryKey: queryKeys.tasks(filter),
     queryFn: ({ signal }) => fetchTasks(statusForFilter(filter), signal),
     refetchInterval: LIVE_REFRESH_MS,
+  })
+}
+
+/**
+ * One task, for the edit sheet. Seeded with the row's data but marked stale, so opening the
+ * sheet always confirms the current server version (and its `version`) in the background.
+ */
+export function useTask(task: Task) {
+  return useQuery({
+    queryKey: queryKeys.task(task.id),
+    queryFn: ({ signal }) => fetchTask(task.id, signal),
+    initialData: task,
+    initialDataUpdatedAt: 0,
+    refetchOnMount: 'always',
   })
 }

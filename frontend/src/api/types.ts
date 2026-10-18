@@ -20,6 +20,29 @@ export interface Task {
   version: number
 }
 
+/** POST /tasks. Status is never sent: the backend derives it from scheduledFor. */
+export interface CreateTaskRequest {
+  title: string
+  description?: string
+  importance?: number
+  estimatedDurationMinutes?: number
+  deadline?: string
+  scheduledFor?: string
+}
+
+/**
+ * PATCH /tasks/{id}: an omitted key leaves the field unchanged, an explicit null clears it.
+ * Lifecycle fields (status, scheduledFor, completedAt) are not part of the type, so they
+ * can't be sent by mistake; scheduling goes through POST /tasks/{id}/schedule.
+ */
+export interface TaskPatch {
+  title?: string
+  description?: string | null
+  importance?: number
+  estimatedDurationMinutes?: number | null
+  deadline?: string | null
+}
+
 export interface AppInfo {
   zoneId: string
 }
