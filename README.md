@@ -123,11 +123,17 @@ Configuration (environment variables, defaults in `application.yml`):
 | `APP_ACTIVATION_ENABLED` | `true` |
 | `APP_ACTIVATION_FIXED_DELAY` | `PT5M` |
 
-## Frontend (in progress)
+## Frontend
 
 A React + TypeScript app in [`frontend/`](frontend), built separately from the backend
-(Vite, Tailwind CSS, shadcn/ui, TanStack Query, React Router). It is currently **read-only**:
-Today (Agenda + Focus recommendations with an available-time filter) and Tasks (status filters).
+(Vite, Tailwind CSS, shadcn/ui, TanStack Query, React Router): **Today** (Agenda + Focus
+recommendations with an available-time filter) and **Tasks** (status filters), with quick
+create, an edit sheet, complete / reopen / schedule / delete from each row.
+
+Mutations are server-confirmed (no optimistic UI) and refresh every task view afterwards.
+Edits send a minimal PATCH with `If-Match`; if the task changed elsewhere, the draft is kept and
+the user can review the differences, discard, or save only their own changes over the latest
+version.
 
 **Prerequisites:** Node.js 22+ and the backend running on `localhost:8080`.
 
@@ -142,7 +148,7 @@ CORS configuration (`TASKPILOT_API_URL` overrides the target). The UI reads the 
 timezone from `GET /app-info` and uses it for every date it shows or builds.
 
 ```bash
-npm test           # Vitest: time/DST helpers, error normalisation, URL state, components
+npm test           # Vitest: PATCH diff + conflict rebase, time/DST, errors, URL state, components
 npm run typecheck
 npm run build
 ```
