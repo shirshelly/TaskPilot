@@ -125,8 +125,11 @@ class TaskScheduleApiTest {
     void schedulingIntoThePastReturns400AndLeavesTaskUnchanged() throws Exception {
         Task task = taskRepository.save(Task.create("Dentist", null, null, null, null, inDaysAt(2, 16), clock));
 
+        // Domain validation (Task.schedule), not bean validation: our own message is the detail.
         mockMvc.perform(schedule(task.getId(), inDaysAt(-1, 9)))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.detail").value("scheduledFor must not be in the past"));
 
         assertUnchanged(task);
     }

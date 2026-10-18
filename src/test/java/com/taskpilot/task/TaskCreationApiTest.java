@@ -120,10 +120,12 @@ class TaskCreationApiTest {
                 {"title": "   "}
                 """;
 
+        // Rejected by @Valid (@NotBlank) before the domain sees it: framework 400, same code.
         mockMvc.perform(post("/tasks")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
     }
 
     @Test

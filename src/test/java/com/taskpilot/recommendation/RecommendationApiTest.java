@@ -27,6 +27,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -109,7 +110,8 @@ class RecommendationApiTest {
     void nonPositiveOrNonNumericAvailableMinutesReturns400() throws Exception {
         for (String invalid : List.of("0", "-5", "abc")) {
             mockMvc.perform(get("/recommendations").param("availableMinutes", invalid))
-                    .andExpect(status().isBadRequest());
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
         }
     }
 

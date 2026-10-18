@@ -167,7 +167,10 @@ class TaskUpdateApiTest {
         mockMvc.perform(patchTask(before.getId(), """
                         {"title": "Would be renamed", "status": "COMPLETED"}
                         """))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                // Body-parsing failures get Spring's generic detail, never the Jackson message.
+                .andExpect(jsonPath("$.detail").value("Failed to read request"));
 
         assertRowUnchanged(before);
     }

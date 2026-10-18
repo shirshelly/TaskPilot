@@ -78,7 +78,8 @@ class TaskReadApiTest {
     @Test
     void getMissingTaskReturns404() throws Exception {
         mockMvc.perform(get("/tasks/{id}", UUID.randomUUID()))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("TASK_NOT_FOUND"));
     }
 
     @Test

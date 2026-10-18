@@ -109,7 +109,8 @@ class TaskCompletionApiTest {
         task = taskRepository.save(task);
 
         mockMvc.perform(post("/tasks/{id}/complete", task.getId()))
-                .andExpect(status().isConflict());
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INVALID_STATE_TRANSITION"));
 
         Task persisted = taskRepository.findById(task.getId()).orElseThrow();
         assertThat(persisted.getCompletedAt()).isEqualTo(task.getCompletedAt());

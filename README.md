@@ -30,7 +30,9 @@ JUnit 5 · AssertJ · Mockito · Testcontainers
 - **Scheduled background activation** of due tasks, recoverable after downtime.
 - **Business queries, not just lists:** the Agenda and a deterministic recommendation ranking.
 - **Consistent error semantics:** `400` invalid input, `404` missing task, `409` invalid lifecycle
-  transition or concurrent modification.
+  transition or concurrent modification — as RFC 9457 Problem Details with a stable `code`
+  (`VALIDATION_FAILED`, `TASK_NOT_FOUND`, `INVALID_STATE_TRANSITION`, `VERSION_CONFLICT`, …) so
+  clients never parse messages.
 - **Integration tests against real PostgreSQL** (Testcontainers), not H2.
 
 ## Core Semantics

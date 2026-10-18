@@ -1292,6 +1292,38 @@ The domain should not know HTTP status codes.
 
 API exception handling maps domain/application exceptions to HTTP responses.
 
+### Error response body
+
+Every error is an RFC 9457 Problem Details document (`application/problem+json`) with one
+extension property, `code`: a stable, machine-readable value clients branch on instead of
+HTTP status or message text.
+
+```json
+{ "title": "Conflict", "status": 409, "detail": "Task is already completed",
+  "instance": "/tasks/3f…/complete", "code": "INVALID_STATE_TRANSITION" }
+```
+
+```text
+code                       status            source
+VALIDATION_FAILED          400               TaskValidationException; Spring MVC binding, body-parsing,
+                                             @Valid / method-validation and type-conversion errors
+TASK_NOT_FOUND             404               TaskNotFoundException
+INVALID_STATE_TRANSITION   409               TaskStateException
+VERSION_CONFLICT           409               optimistic-lock failure at commit (§42)
+REQUEST_NOT_SUPPORTED      other 4xx         unknown route, unsupported method / media type
+INTERNAL_ERROR             500               anything unhandled
+```
+
+`detail` is safe to show: domain exceptions carry messages we author, Spring MVC's own errors
+keep Spring's generic details (e.g. "Failed to read request" — parser messages are never
+echoed), and unhandled exceptions are logged server-side and answered with a fixed message.
+`server.error.include-message` stays at its default (`never`).
+
+Implemented by `ApiExceptionHandler`, which extends `ResponseEntityExceptionHandler` so
+Spring MVC's exceptions are produced as Problem Details and only gain the `code`. Errors raised
+outside Spring MVC (servlet filters) still get Spring Boot's default error body; clients fall
+back to the HTTP status for those.
+
 ---
 
 ## 34. Spring Boot Application Structure
