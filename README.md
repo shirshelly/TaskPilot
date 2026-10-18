@@ -72,6 +72,7 @@ JUnit 5 · AssertJ · Mockito · Testcontainers
 | `POST /tasks/{id}/schedule` | Schedule/reschedule (`{"scheduledFor": ...}`); today → `ACTIVE`, future → `SCHEDULED` | `200` |
 | `GET /agenda/today` | Today's Agenda | `200` |
 | `GET /recommendations[?availableMinutes=N]` | Ranked actionable tasks | `200` |
+| `GET /app-info` | Configured application timezone (`{"zoneId": ...}`) for clients | `200` |
 
 PATCH distinguishes an absent field (unchanged) from an explicit `null` (cleared, for nullable
 fields) and rejects unknown or lifecycle fields with `400`.

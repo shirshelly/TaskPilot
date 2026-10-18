@@ -865,7 +865,13 @@ POST   /tasks/{id}/schedule
 
 GET    /agenda/today
 GET    /recommendations[?availableMinutes=N]
+
+GET    /app-info
 ```
+
+`GET /app-info` returns `{"zoneId": "<configured zone>"}`, read from the application `Clock`.
+Clients use it to construct and display `scheduledFor` in the same zone the backend uses for
+"today" (§19), instead of assuming the browser's timezone matches.
 
 Success statuses:
 
