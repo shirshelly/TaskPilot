@@ -3,9 +3,11 @@ package com.taskpilot.task;
 import com.taskpilot.task.dto.CreateTaskRequest;
 import com.taskpilot.task.dto.ScheduleTaskRequest;
 import com.taskpilot.task.dto.TaskResponse;
+import com.taskpilot.task.dto.UpdateTaskRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -48,6 +50,12 @@ public class TaskController {
         return taskService.list(status).stream()
                 .map(task -> TaskResponse.from(task, clock))
                 .toList();
+    }
+
+    @PatchMapping("/{id}")
+    public TaskResponse updateTask(@PathVariable UUID id, @RequestBody UpdateTaskRequest request) {
+        Task task = taskService.update(id, request);
+        return TaskResponse.from(task, clock);
     }
 
     @PostMapping("/{id}/complete")

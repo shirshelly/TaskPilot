@@ -1,6 +1,7 @@
 package com.taskpilot.task;
 
 import com.taskpilot.task.dto.CreateTaskRequest;
+import com.taskpilot.task.dto.UpdateTaskRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +42,32 @@ public class TaskService {
     @Transactional(readOnly = true)
     public List<Task> list(TaskStatus status) {
         return status == null ? taskRepository.findAll() : taskRepository.findByStatus(status);
+    }
+
+    @Transactional
+    public Task update(UUID id, UpdateTaskRequest request) {
+        Task task = findOrThrow(id);
+        // Only fields present in the request are applied; an empty PATCH touches nothing,
+        // so updatedAt/version stay put. Any validation failure rolls back every field.
+        if (request.hasTitle()) {
+            task.rename(request.title(), clock);
+        }
+        if (request.hasDescription()) {
+            task.updateDescription(request.description(), clock);
+        }
+        if (request.hasImportance()) {
+            if (request.importance() == null) {
+                throw new TaskValidationException("importance cannot be cleared");
+            }
+            task.updateImportance(request.importance(), clock);
+        }
+        if (request.hasEstimatedDurationMinutes()) {
+            task.updateEstimatedDurationMinutes(request.estimatedDurationMinutes(), clock);
+        }
+        if (request.hasDeadline()) {
+            task.updateDeadline(request.deadline(), clock);
+        }
+        return task;
     }
 
     @Transactional

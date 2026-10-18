@@ -347,17 +347,36 @@ class TaskTest {
         @Test
         void renameUpdatesTitleAndTimestamp() {
             Task task = Task.create("Old title", null, null, null, null, null, clockOnToday());
+            Clock updateClock = Clock.offset(clockOnToday(), Duration.ofHours(3));
 
-            task.rename("New title", clockOnToday());
+            task.rename("New title", updateClock);
 
             assertThat(task.getTitle()).isEqualTo("New title");
+            assertThat(task.getUpdatedAt()).isEqualTo(updateClock.instant());
         }
 
         @Test
-        void renameRejectsBlankTitle() {
+        void renameRejectsBlankOrNullTitle() {
             Task task = Task.create("Task", null, null, null, null, null, clockOnToday());
 
             assertThatIllegalArgumentException().isThrownBy(() -> task.rename("  ", clockOnToday()));
+            assertThatIllegalArgumentException().isThrownBy(() -> task.rename(null, clockOnToday()));
+        }
+
+        @Test
+        void nullableFieldsCanBeClearedWithoutTouchingLifecycleState() {
+            OffsetDateTime tomorrow = at(TODAY.plusDays(1), 9);
+            Task task = Task.create("Task", "Notes", null, 30, TODAY.plusDays(2), tomorrow, clockOnToday());
+
+            task.updateDescription(null, clockOnToday());
+            task.updateEstimatedDurationMinutes(null, clockOnToday());
+            task.updateDeadline(null, clockOnToday());
+
+            assertThat(task.getDescription()).isNull();
+            assertThat(task.getEstimatedDurationMinutes()).isNull();
+            assertThat(task.getDeadline()).isNull();
+            assertThat(task.getStatus()).isEqualTo(TaskStatus.SCHEDULED);
+            assertThat(task.getScheduledFor()).isEqualTo(tomorrow);
         }
 
         @Test

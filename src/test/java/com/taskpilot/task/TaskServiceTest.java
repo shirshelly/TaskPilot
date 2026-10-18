@@ -1,6 +1,7 @@
 package com.taskpilot.task;
 
 import com.taskpilot.task.dto.CreateTaskRequest;
+import com.taskpilot.task.dto.UpdateTaskRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -158,6 +159,62 @@ class TaskServiceTest {
         when(taskRepository.findById(id)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> taskService.reopen(id)).isInstanceOf(TaskNotFoundException.class);
+    }
+
+    @Test
+    void updateAppliesOnlyFieldsPresentInTheRequest() {
+        Task task = Task.create("Old title", "Keep me", 2, 30, TODAY.plusDays(3), null,
+                Clock.offset(CLOCK, Duration.ofDays(-1)));
+        TaskService taskService = new TaskService(taskRepository, CLOCK);
+        when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
+        UpdateTaskRequest request = new UpdateTaskRequest();
+        request.setTitle("New title");
+        request.setDeadline(null);
+
+        Task result = taskService.update(task.getId(), request);
+
+        assertThat(result.getTitle()).isEqualTo("New title");
+        assertThat(result.getDeadline()).isNull();
+        assertThat(result.getDescription()).isEqualTo("Keep me");
+        assertThat(result.getImportance()).isEqualTo(2);
+        assertThat(result.getEstimatedDurationMinutes()).isEqualTo(30);
+        assertThat(result.getUpdatedAt()).isEqualTo(CLOCK.instant());
+    }
+
+    @Test
+    void emptyUpdateLeavesTheTaskUntouched() {
+        Clock creationClock = Clock.offset(CLOCK, Duration.ofDays(-1));
+        Task task = Task.create("Task", "Notes", null, null, null, null, creationClock);
+        TaskService taskService = new TaskService(taskRepository, CLOCK);
+        when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
+
+        Task result = taskService.update(task.getId(), new UpdateTaskRequest());
+
+        assertThat(result.getUpdatedAt()).isEqualTo(creationClock.instant());
+        assertThat(result.getDescription()).isEqualTo("Notes");
+    }
+
+    @Test
+    void updateRejectsExplicitNullImportance() {
+        Task task = Task.create("Task", null, 4, null, null, null, CLOCK);
+        TaskService taskService = new TaskService(taskRepository, CLOCK);
+        when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
+        UpdateTaskRequest request = new UpdateTaskRequest();
+        request.setImportance(null);
+
+        assertThatThrownBy(() -> taskService.update(task.getId(), request))
+                .isInstanceOf(TaskValidationException.class);
+        assertThat(task.getImportance()).isEqualTo(4);
+    }
+
+    @Test
+    void updateThrowsTaskNotFoundExceptionWhenRepositoryFindsNothing() {
+        TaskService taskService = new TaskService(taskRepository, CLOCK);
+        UUID id = UUID.randomUUID();
+        when(taskRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> taskService.update(id, new UpdateTaskRequest()))
+                .isInstanceOf(TaskNotFoundException.class);
     }
 
     @Test
