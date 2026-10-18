@@ -159,4 +159,30 @@ class TaskServiceTest {
 
         assertThatThrownBy(() -> taskService.reopen(id)).isInstanceOf(TaskNotFoundException.class);
     }
+
+    @Test
+    void scheduleLoadsTheTaskAndSchedulesItUsingTheInjectedClock() {
+        Clock earlierClock = Clock.offset(CLOCK, Duration.ofDays(-1));
+        Task task = Task.create("Task", null, null, null, null, null, earlierClock);
+        TaskService taskService = new TaskService(taskRepository, CLOCK);
+        when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
+        OffsetDateTime future = TODAY.plusDays(2).atTime(9, 0).atOffset(ZoneOffset.UTC);
+
+        Task result = taskService.schedule(task.getId(), future);
+
+        assertThat(result).isSameAs(task);
+        assertThat(result.getStatus()).isEqualTo(TaskStatus.SCHEDULED);
+        assertThat(result.getScheduledFor()).isEqualTo(future);
+        assertThat(result.getUpdatedAt()).isEqualTo(CLOCK.instant());
+    }
+
+    @Test
+    void scheduleThrowsTaskNotFoundExceptionWhenRepositoryFindsNothing() {
+        TaskService taskService = new TaskService(taskRepository, CLOCK);
+        UUID id = UUID.randomUUID();
+        when(taskRepository.findById(id)).thenReturn(Optional.empty());
+        OffsetDateTime future = TODAY.plusDays(2).atTime(9, 0).atOffset(ZoneOffset.UTC);
+
+        assertThatThrownBy(() -> taskService.schedule(id, future)).isInstanceOf(TaskNotFoundException.class);
+    }
 }

@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -55,6 +56,13 @@ public class TaskService {
     public Task reopen(UUID id) {
         Task task = findOrThrow(id);
         task.reopen(clock);
+        return task;
+    }
+
+    @Transactional
+    public Task schedule(UUID id, OffsetDateTime scheduledFor) {
+        Task task = findOrThrow(id);
+        task.schedule(scheduledFor, clock);
         return task;
     }
 

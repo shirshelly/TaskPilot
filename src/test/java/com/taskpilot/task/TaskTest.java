@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -17,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class TaskTest {
 
     private static final LocalDate TODAY = LocalDate.of(2026, 8, 25);
+    private static final ZoneId JERUSALEM = ZoneId.of("Asia/Jerusalem");
 
     private static Clock clockOnToday() {
         return Clock.fixed(TODAY.atStartOfDay(ZoneOffset.UTC).toInstant(), ZoneOffset.UTC);
@@ -188,13 +190,54 @@ class TaskTest {
 
         @Test
         void activeTaskSchedulesToFutureDate() {
-            Task task = Task.create("Task", null, null, null, null, null, clockOnToday());
+            LocalDate deadline = TODAY.plusDays(1);
+            Task task = Task.create("Task", null, null, null, deadline, null, clockOnToday());
+            // Later than creation, so updatedAt provably comes from the schedule clock.
+            Clock scheduleClock = Clock.offset(clockOnToday(), Duration.ofHours(3));
 
             OffsetDateTime future = at(TODAY.plusDays(3), 10);
-            task.schedule(future, clockOnToday());
+            task.schedule(future, scheduleClock);
 
             assertThat(task.getStatus()).isEqualTo(TaskStatus.SCHEDULED);
             assertThat(task.getScheduledFor()).isEqualTo(future);
+            assertThat(task.getUpdatedAt()).isEqualTo(scheduleClock.instant());
+            assertThat(task.getDeadline()).isEqualTo(deadline);
+            assertThat(task.getCompletedAt()).isNull();
+        }
+
+        @Test
+        void activeTaskSchedulingToTodayStaysActiveAndStoresTheTimestamp() {
+            Task task = Task.create("Task", null, null, null, null, null, clockOnToday());
+            OffsetDateTime laterToday = at(TODAY, 18);
+
+            task.schedule(laterToday, clockOnToday());
+
+            assertThat(task.getStatus()).isEqualTo(TaskStatus.ACTIVE);
+            assertThat(task.getScheduledFor()).isEqualTo(laterToday);
+        }
+
+        @Test
+        void localDateInConfiguredZoneDecidesFutureNotTheUtcDate() {
+            // Noon Aug 25 in Jerusalem (UTC+3). 22:00Z is still Aug 25 in UTC but already
+            // Aug 26 01:00 locally, so it is a future local date -> SCHEDULED, not ACTIVE.
+            Clock jerusalemNoon = Clock.fixed(Instant.parse("2026-08-25T09:00:00Z"), JERUSALEM);
+            Task task = Task.create("Task", null, null, null, null, null, jerusalemNoon);
+
+            task.schedule(OffsetDateTime.parse("2026-08-25T22:00:00Z"), jerusalemNoon);
+
+            assertThat(task.getStatus()).isEqualTo(TaskStatus.SCHEDULED);
+        }
+
+        @Test
+        void localDateInConfiguredZoneDecidesPastNotTheUtcDate() {
+            // 01:00 Aug 26 in Jerusalem, while UTC is still Aug 25. 20:00Z is Aug 25 23:00
+            // locally -> yesterday -> rejected, even though its UTC date equals UTC "today".
+            Clock jerusalemAfterMidnight = Clock.fixed(Instant.parse("2026-08-25T22:00:00Z"), JERUSALEM);
+            Task task = Task.create("Task", null, null, null, null, null, jerusalemAfterMidnight);
+
+            assertThatThrownBy(() -> task.schedule(OffsetDateTime.parse("2026-08-25T20:00:00Z"), jerusalemAfterMidnight))
+                    .isInstanceOf(TaskValidationException.class);
+            assertThat(task.getScheduledFor()).isNull();
         }
 
         @Test

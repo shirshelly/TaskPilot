@@ -2,6 +2,7 @@ package com.taskpilot.common;
 
 import com.taskpilot.task.TaskNotFoundException;
 import com.taskpilot.task.TaskStateException;
+import com.taskpilot.task.TaskValidationException;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
@@ -28,6 +29,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(TaskStateException.class)
     void handleInvalidStateTransition(TaskStateException ex, HttpServletResponse response) throws IOException {
         response.sendError(HttpStatus.CONFLICT.value(), ex.getMessage());
+    }
+
+    @ExceptionHandler(TaskValidationException.class)
+    void handleDomainValidation(TaskValidationException ex, HttpServletResponse response) throws IOException {
+        response.sendError(HttpStatus.BAD_REQUEST.value(), ex.getMessage());
     }
 
     // Stale @Version write (§42). Spring translates Hibernate's StaleObjectStateException into

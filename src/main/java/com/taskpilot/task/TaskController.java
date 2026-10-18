@@ -1,6 +1,7 @@
 package com.taskpilot.task;
 
 import com.taskpilot.task.dto.CreateTaskRequest;
+import com.taskpilot.task.dto.ScheduleTaskRequest;
 import com.taskpilot.task.dto.TaskResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -58,6 +59,12 @@ public class TaskController {
     @PostMapping("/{id}/reopen")
     public TaskResponse reopenTask(@PathVariable UUID id) {
         Task task = taskService.reopen(id);
+        return TaskResponse.from(task, clock);
+    }
+
+    @PostMapping("/{id}/schedule")
+    public TaskResponse scheduleTask(@PathVariable UUID id, @Valid @RequestBody ScheduleTaskRequest request) {
+        Task task = taskService.schedule(id, request.scheduledFor());
         return TaskResponse.from(task, clock);
     }
 }

@@ -135,12 +135,12 @@ public class Task {
             throw new TaskStateException("A completed task cannot be scheduled directly; reopen it first");
         }
         if (newScheduledFor == null) {
-            throw new IllegalArgumentException("scheduledFor is required");
+            throw new TaskValidationException("scheduledFor is required");
         }
         LocalDate today = LocalDate.now(clock);
         LocalDate newLocalDate = localDateOf(newScheduledFor, clock);
         if (newLocalDate.isBefore(today)) {
-            throw new IllegalArgumentException("scheduledFor must not be in the past");
+            throw new TaskValidationException("scheduledFor must not be in the past");
         }
         this.scheduledFor = newScheduledFor;
         // Resolving to today activates immediately rather than waiting for the worker (§25).
@@ -204,14 +204,14 @@ public class Task {
 
     private static String requireNonBlankTitle(String candidate) {
         if (candidate == null || candidate.isBlank()) {
-            throw new IllegalArgumentException("title must not be blank");
+            throw new TaskValidationException("title must not be blank");
         }
         return candidate;
     }
 
     private static int requireValidImportance(int candidate) {
         if (candidate < MIN_IMPORTANCE || candidate > MAX_IMPORTANCE) {
-            throw new IllegalArgumentException(
+            throw new TaskValidationException(
                     "importance must be between " + MIN_IMPORTANCE + " and " + MAX_IMPORTANCE);
         }
         return candidate;
@@ -219,7 +219,7 @@ public class Task {
 
     private static Integer requireValidDuration(Integer candidate) {
         if (candidate != null && candidate <= 0) {
-            throw new IllegalArgumentException("estimatedDurationMinutes must be positive");
+            throw new TaskValidationException("estimatedDurationMinutes must be positive");
         }
         return candidate;
     }
