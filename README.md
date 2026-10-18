@@ -1,90 +1,121 @@
 # TaskPilot
 
-A backend-focused personal task manager, built to demonstrate real backend engineering — domain
-modeling, state machines, persistence, and testing — rather than another basic to-do app.
+A backend-focused, single-user personal task manager. It answers two questions:
 
-The system is designed to answer two questions:
+1. **What do I have today?** → `GET /agenda/today`
+2. **What should I focus on right now?** → `GET /recommendations`
 
-1. **What do I have today?**
-2. **What should I focus on right now?**
-
-(Both answers — Agenda and Recommendations — are part of the V1 design but not implemented yet;
-see [Roadmap](#roadmap).)
+The project is deliberately small in scope and is meant to show backend engineering — domain
+modeling, a lifecycle state machine, transactions, concurrency, scheduling, and time handling —
+rather than CRUD alone. The full design lives in [`docs/V1-DESIGN.md`](docs/V1-DESIGN.md).
 
 ## Tech Stack
 
-- **Java 21**, **Spring Boot 4.1.x**
-- **PostgreSQL 16**, schema owned by **Flyway** migrations
-- **Spring Data JPA** / **Hibernate** for persistence (schema *validation* only — see below)
-- **Testcontainers** for real-PostgreSQL integration tests (no H2)
-- **JUnit 5**, **AssertJ**, **Mockito**
+Java 21 · Spring Boot 4.1 · Spring Data JPA / Hibernate · PostgreSQL 16 · Flyway ·
+JUnit 5 · AssertJ · Mockito · Testcontainers
 
-## Key Engineering Decisions
+## What Makes It More Than CRUD
 
-- **`Task` is a rich domain model, not a data bag.** No arbitrary setters for lifecycle state.
-  Every state change goes through an explicit operation — `create`, `complete`, `reopen`,
-  `schedule`, `activate` — each enforcing its own invariants (importance range, positive
-  duration, schedule/reschedule operations reject past dates, no double-completion, etc.).
-- **Status is always backend-derived.** Clients cannot set `status` directly, at creation or
-  otherwise; the request DTO simply has no such field.
-- **All time-dependent logic uses an injected `Clock`**, never `now()` directly. The app runs on
-  a single configured timezone (`app.zone-id`, default `Asia/Jerusalem`), so "today" is
-  deterministic and independent of the deploying machine's OS timezone.
-- **Flyway is the schema source of truth.** Hibernate is configured with `ddl-auto=validate`
-  only — it validates the entity mapping against the Flyway-created schema and never creates or
-  alters tables itself.
-- **Optimistic locking via `@Version`**, backed by a real `version` column, protecting against
-  concurrent writes (e.g. a future scheduled-activation worker racing a user API call).
-- **DTOs at the API boundary.** Controllers never return JPA entities directly.
-- **Thin controllers.** HTTP concerns stop at the controller; business rules live in `Task`,
-  orchestration lives in the service layer.
+- **Rich domain model.** `Task` owns its lifecycle (`complete`, `reopen`, `schedule`,
+  `activate`) and invariants. There is no way to set `status` directly — not in the API, not via
+  setters.
+- **Schema owned by Flyway.** Hibernate runs with `ddl-auto=validate`; the database also enforces
+  invariants with `CHECK` constraints (e.g. `COMPLETED ⇔ completed_at IS NOT NULL`).
+- **Explicit transaction boundaries** in the service layer, using JPA dirty checking.
+- **Optimistic locking** (`@Version`): a stale API write returns `409`; in the background worker it
+  skips only the affected task.
+- **Timezone-aware date semantics.** All time logic uses an injected `Clock` and one configured
+  zone (`app.zone-id`). Date-based queries compare `TIMESTAMPTZ` values against zone-derived
+  instant bounds, so results never depend on the JVM or database session timezone.
+- **Scheduled background activation** of due tasks, recoverable after downtime.
+- **Business queries, not just lists:** the Agenda and a deterministic recommendation ranking.
+- **Consistent error semantics:** `400` invalid input, `404` missing task, `409` invalid lifecycle
+  transition or concurrent modification.
+- **Integration tests against real PostgreSQL** (Testcontainers), not H2.
 
-## Currently Implemented
+## Core Semantics
 
-- **Domain model**: `Task` (rich entity) and `TaskStatus` (`SCHEDULED` / `ACTIVE` / `COMPLETED`),
-  with lifecycle operations `create`, `complete`, `reopen`, `schedule`, `activate`, validated
-  non-lifecycle field updates, and a computed `isOverdue(Clock)`.
-- **Persistence**: Flyway migration creating the `tasks` table (with `CHECK` constraints for
-  status/importance/duration/schedule/completion invariants and a `(status, scheduled_for)`
-  index) and a `TaskRepository` (Spring Data JPA).
-- **API**: `POST /tasks` — creates a task. Client supplies `title` (required), and optionally
-  `description`, `importance` (default `3`), `estimatedDurationMinutes`, `deadline`,
-  `scheduledFor`. Status is derived: `SCHEDULED` if `scheduledFor`'s local date (in the
-  configured zone) is after today, otherwise `ACTIVE`. Returns `201` with a `TaskResponse`;
-  invalid input returns `400`.
+| Status | Meaning |
+|---|---|
+| `SCHEDULED` | Exists but is not actionable until its `scheduledFor` date arrives |
+| `ACTIVE` | Open and actionable now |
+| `COMPLETED` | Done; can be explicitly reopened |
 
-**Not yet implemented**: `GET`/`PATCH`/`DELETE /tasks`, the `complete`/`reopen`/`schedule`
-lifecycle endpoints, Agenda, Recommendations, the scheduled activation worker, and every item in
-`docs/AI-ROADMAP.md` (natural-language task input, tool-calling assistant, guardrails, evals).
-None of these are started.
+- **`scheduledFor`** (timestamp): when the task should return to attention. V1 uses only its
+  *local date*: a task scheduled for today is `ACTIVE` immediately, even if the time is later today.
+- **`deadline`** (date): when it should be done. It never affects actionability.
+- **Agenda** (`/agenda/today`): unfinished tasks whose `scheduledFor` local date is today or
+  earlier, or whose `deadline` is today or earlier. Past days roll over until handled. A plain
+  `ACTIVE` task with no schedule or deadline does not appear.
+- **Recommendations** (`/recommendations`): `ACTIVE` tasks only, optionally limited to those with
+  a known duration ≤ `availableMinutes`, ranked by a deterministic score
+  (`importance × 10` + bounded deadline-urgency points + age capped at 5) with a fixed
+  tie-breaker chain. The formula is documented in `docs/V1-DESIGN.md` §31; scores are not exposed.
+- **Scheduled activation:** every 5 minutes (configurable) a worker moves `SCHEDULED` tasks whose
+  `scheduledFor` local date is today or earlier to `ACTIVE`. Because the rule is `<= today`, a
+  missed run or downtime is caught up by the next run. Each task is activated in its own
+  transaction; a concurrent modification skips only that task until the next run.
 
-## Local Setup
+## API
 
-**Prerequisites**: Java 21, Docker (for PostgreSQL and for running the Testcontainers-based
-tests).
+| Method & path | Purpose | Success |
+|---|---|---|
+| `POST /tasks` | Create (status is derived, never sent) | `201` |
+| `GET /tasks/{id}` | Read one | `200` |
+| `GET /tasks[?status=ACTIVE\|SCHEDULED\|COMPLETED]` | List, optionally filtered | `200` |
+| `PATCH /tasks/{id}` | Partial update of `title`, `description`, `importance`, `estimatedDurationMinutes`, `deadline` | `200` |
+| `DELETE /tasks/{id}` | Hard delete | `204` |
+| `POST /tasks/{id}/complete` | `ACTIVE`/`SCHEDULED` → `COMPLETED` | `200` |
+| `POST /tasks/{id}/reopen` | `COMPLETED` → `ACTIVE` | `200` |
+| `POST /tasks/{id}/schedule` | Schedule/reschedule (`{"scheduledFor": ...}`); today → `ACTIVE`, future → `SCHEDULED` | `200` |
+| `GET /agenda/today` | Today's Agenda | `200` |
+| `GET /recommendations[?availableMinutes=N]` | Ranked actionable tasks | `200` |
 
-1. Start PostgreSQL, matching the app's default connection settings:
+PATCH distinguishes an absent field (unchanged) from an explicit `null` (cleared, for nullable
+fields) and rejects unknown or lifecycle fields with `400`.
+
+## Architecture
+
+```text
+Controller (HTTP, DTOs) → Service (transactions, orchestration) → Task (domain rules) → Repository → PostgreSQL
+```
+
+Separate use cases sit beside the task CRUD/lifecycle flow:
+
+- `agenda/` — `AgendaController → AgendaService → TaskRepository` (one query, read-only)
+- `recommendation/` — `RecommendationService`: actionability → duration eligibility → `RecommendationRanker`
+- `scheduling/` — `ScheduledTaskActivator` → `TaskService.activateIfDue` (one transaction per task) → `Task.activate`
+
+## Running Locally
+
+**Prerequisites:** Java 21 and Docker. Maven is provided by the wrapper (`./mvnw`).
+
+1. Start PostgreSQL with the app's default connection settings:
    ```bash
    docker run -d --name taskpilot-postgres \
-     -e POSTGRES_DB=taskpilot \
-     -e POSTGRES_USER=taskpilot \
-     -e POSTGRES_PASSWORD=taskpilot \
-     -p 5432:5432 \
-     postgres:16
+     -e POSTGRES_DB=taskpilot -e POSTGRES_USER=taskpilot -e POSTGRES_PASSWORD=taskpilot \
+     -p 5432:5432 postgres:16
    ```
-2. Run the application (applies Flyway migrations on startup):
+2. Run the application (Flyway applies migrations on startup):
    ```bash
    ./mvnw spring-boot:run
    ```
-3. Create a task:
+3. Try it:
    ```bash
-   curl -X POST http://localhost:8080/tasks \
-     -H "Content-Type: application/json" \
-     -d '{"title": "Buy plant"}'
+   curl -X POST localhost:8080/tasks -H 'Content-Type: application/json' \
+     -d '{"title": "Homework", "importance": 4, "estimatedDurationMinutes": 90, "deadline": "2026-12-01"}'
+   curl localhost:8080/agenda/today
+   curl 'localhost:8080/recommendations?availableMinutes=30'
    ```
 
-Connection settings are overridable via `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, and the
-configured timezone via `APP_ZONE_ID`.
+Configuration (environment variables, defaults in `application.yml`):
+
+| Variable | Default |
+|---|---|
+| `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | `jdbc:postgresql://localhost:5432/taskpilot` / `taskpilot` / `taskpilot` |
+| `APP_ZONE_ID` | `Asia/Jerusalem` |
+| `APP_ACTIVATION_ENABLED` | `true` |
+| `APP_ACTIVATION_FIXED_DELAY` | `PT5M` |
 
 ## Testing
 
@@ -92,31 +123,24 @@ configured timezone via `APP_ZONE_ID`.
 ./mvnw test
 ```
 
-Docker must be running — the persistence and API tests spin up a real PostgreSQL 16 container
-via Testcontainers rather than substituting H2, so constraint enforcement, optimistic locking,
-and Flyway migration behavior are verified against the same database engine used by the application.
+Docker must be running: persistence, API, and worker tests use a real PostgreSQL 16 container via
+Testcontainers. The scheduled trigger is disabled in tests; worker tests invoke it directly with a
+fixed `Clock`.
 
-- **Domain unit tests** (`TaskTest`) — no Spring context, no database; cover status derivation
-  and every lifecycle transition, valid and invalid.
-- **Service tests** (`TaskServiceTest`) — Mockito-based, covering orchestration only (repository
-  interaction, `Clock` usage), not business rules already covered above.
-- **Persistence integration tests** (`TaskRepositoryTest`) — real Postgres via Testcontainers:
-  full field-type round-tripping, `@Version` optimistic-lock conflicts, and each database `CHECK`
-  constraint verified independently of `Task`'s own validation via raw JDBC inserts.
-- **API integration tests** (`TaskCreationApiTest`) — end-to-end `HTTP → Controller → Service →
-  Repository → PostgreSQL` via `MockMvc` against the same Testcontainers database.
+- **Domain unit tests** — lifecycle transitions, invariants, local-date rules (no Spring, no DB)
+- **Service tests** — orchestration only (lookups, presence-aware PATCH, eligibility, Clock usage)
+- **Ranker unit tests** — every score band, cap, and tie-breaker; input-order independence
+- **PostgreSQL integration tests** — mapping, `CHECK` constraints, optimistic locking, Agenda and
+  activation queries including timezone boundaries
+- **API integration tests** — `HTTP → Controller → Service → Repository → PostgreSQL` via MockMvc,
+  verifying committed state
+- **Worker tests** — due/future/overdue activation, downtime recovery, and deterministic
+  isolation of an optimistic-lock conflict
 
-## Roadmap
+## Not in V1 / Roadmap
 
-Remaining V1 work, in the order defined in `CLAUDE.md`:
-
-- Read/list endpoints (`GET /tasks`, `GET /tasks/{id}`)
-- Update and lifecycle command endpoints (`PATCH`, `complete`, `reopen`, `schedule`)
-- Today's Agenda (`GET /agenda/today`)
-- Recommendation engine (`GET /recommendations`)
-- Scheduled activation worker (`SCHEDULED → ACTIVE` background transition)
-- Broader integration and edge-case test coverage
-
-AI features (natural-language task capture, a tool-calling assistant, guardrails/confirmation,
-evals) are an explicit later phase per `docs/AI-ROADMAP.md`, intentionally deferred until the
-core V1 backend and its API/domain rules are stable.
+Intentionally out of scope for V1 and **not implemented**: UI, authentication / multi-user,
+recurring tasks, dependencies, automatic schedule generation, calendar integration, persistent
+history/analytics, and any AI features. Future phases are described at the end of
+`docs/V1-DESIGN.md`; optional AI capabilities (natural-language task capture, a tool-calling
+assistant) are planned in `docs/AI-ROADMAP.md` for after the core backend is stable.

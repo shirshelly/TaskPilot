@@ -1,5 +1,6 @@
 package com.taskpilot.recommendation;
 
+import com.taskpilot.FixedClockTestConfiguration;
 import com.taskpilot.task.Task;
 import com.taskpilot.task.TaskRepository;
 import com.taskpilot.task.dto.TaskResponse;
@@ -9,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.testcontainers.junit.jupiter.Container;
@@ -34,6 +36,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * Not @Transactional, like the other API tests, so the re-read sees committed state.
  */
+@Import(FixedClockTestConfiguration.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @AutoConfigureMockMvc
 @Testcontainers

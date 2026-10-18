@@ -861,7 +861,15 @@ POST   /tasks/{id}/reopen
 POST   /tasks/{id}/schedule
 
 GET    /agenda/today
-GET    /recommendations
+GET    /recommendations[?availableMinutes=N]
+```
+
+Success statuses:
+
+```text
+POST /tasks                                → 201 + TaskResponse
+GET, PATCH, complete / reopen / schedule   → 200 + TaskResponse (lists: bare JSON array)
+DELETE /tasks/{id}                         → 204, no body
 ```
 
 ---
@@ -927,13 +935,26 @@ scheduledFor
 `description`, `estimatedDurationMinutes`, and `deadline` are nullable and clearable.
 
 Plain JSON→POJO binding cannot distinguish "field omitted" (leave unchanged) from "field
-explicitly set to `null`" (clear it). The request DTO must use a presence-aware wrapper (for
-example `JsonNullable<T>` or an `Optional<T>`-backed field) for each nullable field:
+explicitly set to `null`" (clear it). The request DTO must be presence-aware for each field:
 
 ```text
 field absent from JSON   → leave current value unchanged
 field present as null    → clear the field
 field present with value → set the field
+```
+
+V1 implementation: `UpdateTaskRequest` is a plain class whose setters record presence (Jackson
+calls a setter only for properties present in the JSON). A record with `Optional<T>` fields does
+not work with Jackson 3 (absent and explicit null both become `Optional.empty()`), and
+`JsonNullable<T>` would add a dependency.
+
+Further PATCH rules:
+
+```text
+{}                                          → no-op (updatedAt/version unchanged)
+title: null / importance: null              → 400 (not clearable)
+unknown or lifecycle property (e.g. status) → 400 (rejected, never silently ignored)
+any invalid supplied value                  → 400, and no field of the request is applied
 ```
 
 ---
@@ -1231,7 +1252,7 @@ Avoid both:
 Suggested logical structure:
 
 ```text
-com.example.taskmanager
+com.taskpilot
 
 task/
     Task
@@ -1252,10 +1273,12 @@ recommendation/
 
 scheduling/
     ScheduledTaskActivator
+    SchedulingConfiguration
 
 common/
     ApiExceptionHandler
     ClockConfiguration
+    DayBoundaries
 ```
 
 The structure may start somewhat flat and split into subpackages later if growth justifies it.
