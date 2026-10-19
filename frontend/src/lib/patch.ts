@@ -1,4 +1,5 @@
 import type { CreateTaskRequest, Task, TaskPatch } from '@/api/types'
+import { durationDraftFromMinutes, EMPTY_DURATION, minutesOf, parseDuration, type DurationDraft } from './duration'
 import { startOfDayIso, zonedDateTimeIso, type IsoDate } from './time'
 
 /**
@@ -9,10 +10,10 @@ export interface TaskDraft {
   title: string
   description: string
   importance: number
-  /** Total estimate in whole minutes as typed; '' means no estimate. */
-  duration: string
-  /** Minimum session in whole minutes as typed; '' means none. */
-  minSession: string
+  /** Total estimate as typed, in minutes or hours; empty text means no estimate. */
+  duration: DurationDraft
+  /** Minimum session as typed, in minutes or hours; empty text means none. */
+  minSession: DurationDraft
   /** 'YYYY-MM-DD' or ''. */
   deadline: string
 }
@@ -51,8 +52,8 @@ export function draftFromTask(task: Task): TaskDraft {
     title: task.title,
     description: task.description ?? '',
     importance: task.importance,
-    duration: minutesText(task.estimatedDurationMinutes),
-    minSession: minutesText(task.minSessionMinutes),
+    duration: durationDraftFromMinutes(task.estimatedDurationMinutes),
+    minSession: durationDraftFromMinutes(task.minSessionMinutes),
     deadline: task.deadline ?? '',
   }
 }
@@ -70,7 +71,8 @@ export function valuesFromTask(task: Task): EditableValues {
 
 /**
  * Draft → API values. Title is trimmed; a blank description, duration or deadline means "none".
- * Only call on a draft that passed validateDraft (minutes are then positive integers or '').
+ * Only call on a draft that passed validateDraft. Durations become whole minutes whatever unit
+ * they were typed in, so changing only the display unit never shows up as a change.
  */
 export function valuesFromDraft(draft: TaskDraft): EditableValues {
   const description = draft.description.trim() === '' ? null : draft.description
@@ -78,38 +80,33 @@ export function valuesFromDraft(draft: TaskDraft): EditableValues {
     title: draft.title.trim(),
     description,
     importance: draft.importance,
-    estimatedDurationMinutes: minutesValue(draft.duration),
-    minSessionMinutes: minutesValue(draft.minSession),
+    estimatedDurationMinutes: minutesOf(draft.duration),
+    minSessionMinutes: minutesOf(draft.minSession),
     deadline: draft.deadline === '' ? null : draft.deadline,
   }
 }
 
 export type DraftErrors = Partial<Record<'title' | 'duration' | 'minSession', string>>
 
-const MINUTES_ERROR = 'Use a whole number of minutes, 1 or more.'
-
 /** Fast feedback for obviously invalid input. The backend still validates everything. */
 export function validateDraft(draft: TaskDraft): DraftErrors {
   const errors: DraftErrors = {}
   if (draft.title.trim() === '') errors.title = 'Give the task a title.'
-  if (!isValidMinutes(draft.duration)) errors.duration = MINUTES_ERROR
-  if (!isValidMinutes(draft.minSession)) errors.minSession = MINUTES_ERROR
+  const duration = parseDuration(draft.duration)
+  if (!duration.ok) errors.duration = duration.error
+  const minSession = parseDuration(draft.minSession)
+  if (!minSession.ok) errors.minSession = minSession.error
   return errors
 }
 
-/** '' (none) or a positive whole number of minutes. */
-function isValidMinutes(text: string): boolean {
-  const value = text.trim()
-  return value === '' || (/^\d+$/.test(value) && Number(value) > 0 && Number(value) <= 999_999)
-}
-
-function minutesValue(text: string): number | null {
-  const value = text.trim()
-  return value === '' ? null : Number(value)
-}
-
-function minutesText(minutes: number | null): string {
-  return minutes === null ? '' : String(minutes)
+/**
+ * Non-blocking consistency check (compares minutes, not typed text): a minimum session longer
+ * than the whole task is allowed by the backend but is probably a typo.
+ */
+export function sessionLongerThanTotal(draft: TaskDraft): boolean {
+  const total = minutesOf(draft.duration)
+  const session = minutesOf(draft.minSession)
+  return total !== null && session !== null && session > total
 }
 
 /**
@@ -193,4 +190,11 @@ export function buildCreateRequest(draft: TaskDraft, startOn: StartOnInput, zone
   return request
 }
 
-export const EMPTY_DRAFT: TaskDraft = { title: '', description: '', importance: 3, duration: '', minSession: '', deadline: '' }
+export const EMPTY_DRAFT: TaskDraft = {
+  title: '',
+  description: '',
+  importance: 3,
+  duration: EMPTY_DURATION,
+  minSession: EMPTY_DURATION,
+  deadline: '',
+}

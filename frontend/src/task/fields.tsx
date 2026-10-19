@@ -1,9 +1,10 @@
-import { useId, type ReactNode } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import { CalendarClock, Flag, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { switchUnit, type DurationDraft, type DurationUnit } from '@/lib/duration'
 import type { StartOnInput } from '@/lib/patch'
 import { cn } from '@/lib/utils'
 
@@ -119,71 +120,119 @@ export function ImportanceField({ value, onChange }: { value: number; onChange: 
   )
 }
 
-export function DurationField({ value, onChange, error }: { value: string; onChange: (value: string) => void; error?: string }) {
-  return (
-    <MinutesField
-      label="Estimated duration"
-      hint="Total time to finish the whole task."
-      placeholder="No estimate"
-      value={value}
-      onChange={onChange}
-      error={error}
-    />
-  )
-}
-
-export function MinSessionField({ value, onChange, error }: { value: string; onChange: (value: string) => void; error?: string }) {
-  return (
-    <MinutesField
-      label="Minimum session"
-      hint="Shortest useful amount of time you can spend on this task."
-      placeholder="Optional"
-      value={value}
-      onChange={onChange}
-      error={error}
-    />
-  )
-}
-
-function MinutesField({
-  label,
-  hint,
-  placeholder,
+export function DurationField({
   value,
   onChange,
   error,
 }: {
-  label: string
-  hint: string
-  placeholder: string
-  value: string
-  onChange: (value: string) => void
+  value: DurationDraft
+  onChange: (value: DurationDraft) => void
   error?: string
 }) {
   const id = useId()
   return (
-    <Field label={label} htmlFor={id} error={error} hint={hint}>
-      <div className="relative">
-        <Input
-          id={id}
-          type="number"
-          inputMode="numeric"
-          min={1}
-          step={1}
-          placeholder={placeholder}
-          value={value}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? `${id}-error` : undefined}
-          onChange={(event) => onChange(event.target.value)}
-          className="pr-12"
-        />
-        <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">
-          min
-        </span>
-      </div>
+    <Field label="Estimated duration" htmlFor={id} error={error} hint="Total time to finish the whole task.">
+      <DurationInput id={id} label="Estimated duration" placeholder="No estimate" value={value} onChange={onChange} error={error} />
     </Field>
   )
 }
+
+export function MinSessionField({
+  value,
+  onChange,
+  error,
+}: {
+  value: DurationDraft
+  onChange: (value: DurationDraft) => void
+  error?: string
+}) {
+  const id = useId()
+  return (
+    <Field label="Minimum session" htmlFor={id} error={error} hint="Shortest useful amount of time you can spend on this task.">
+      <DurationInput id={id} label="Minimum session" placeholder="Optional" value={value} onChange={onChange} error={error} />
+    </Field>
+  )
+}
+
+/**
+ * A duration typed in minutes or hours (decimals allowed for hours). Switching the unit converts
+ * the text so the underlying duration stays the same; if there's no exact way to write it in the
+ * new unit, the unit stays put and a short note explains why.
+ */
+export function DurationInput({
+  id,
+  label,
+  value,
+  onChange,
+  placeholder,
+  error,
+  autoFocus,
+}: {
+  id: string
+  label: string
+  value: DurationDraft
+  onChange: (value: DurationDraft) => void
+  placeholder?: string
+  error?: string
+  autoFocus?: boolean
+}) {
+  const [note, setNote] = useState<string | null>(null)
+  const noteId = `${id}-unit-note`
+  return (
+    <div className="space-y-1.5">
+      <div className="flex gap-2">
+        <Input
+          id={id}
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
+          autoFocus={autoFocus}
+          placeholder={placeholder}
+          value={value.text}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={[error ? `${id}-error` : '', note ? noteId : ''].filter(Boolean).join(' ') || undefined}
+          onChange={(event) => {
+            setNote(null)
+            onChange({ ...value, text: event.target.value })
+          }}
+          className="min-w-0 flex-1"
+        />
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          spacing={0}
+          value={value.unit}
+          aria-label={`${label} unit`}
+          onValueChange={(unit) => {
+            if (!unit) return
+            const result = switchUnit(value, unit as DurationUnit)
+            if (result.ok) {
+              setNote(null)
+              onChange(result.draft)
+            } else {
+              setNote(result.reason)
+            }
+          }}
+          className="shrink-0 bg-card"
+        >
+          <ToggleGroupItem value="min" aria-label="Minutes" className={UNIT_ITEM}>
+            min
+          </ToggleGroupItem>
+          <ToggleGroupItem value="h" aria-label="Hours" className={UNIT_ITEM}>
+            h
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
+      {note && (
+        <p id={noteId} role="status" className="text-xs text-muted-foreground">
+          {note}
+        </p>
+      )}
+    </div>
+  )
+}
+
+const UNIT_ITEM = 'h-8 min-w-10 px-2.5 text-[13px] data-[state=on]:bg-foreground data-[state=on]:text-background'
 
 export function DueByField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const id = useId()

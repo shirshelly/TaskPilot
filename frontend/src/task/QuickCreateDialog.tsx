@@ -20,6 +20,7 @@ import {
   StartOnField,
   TitleField,
 } from './fields'
+import { SessionLongerWarning } from './SessionLongerWarning'
 import { StartAfterDueWarning } from './StartAfterDueWarning'
 
 /** Title + Enter is enough; everything else lives behind "More options". */
@@ -104,6 +105,7 @@ export function QuickCreateDialog({ open, onOpenChange }: { open: boolean; onOpe
                     error={showErrors ? errors.minSession : undefined}
                   />
                 </div>
+                <SessionLongerWarning draft={draft} />
                 <StartOnField value={startOn} onChange={setStartOn} minDate={today} />
                 <DueByField value={draft.deadline} onChange={(deadline) => update({ deadline })} />
                 <StartAfterDueWarning startDate={startOn.date} deadline={draft.deadline} />

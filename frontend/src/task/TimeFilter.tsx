@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { isPreset, MINUTE_PRESETS, parseAvailableMinutes, presetLabel } from '@/lib/minutes'
+import { durationDraftFromMinutes, EMPTY_DURATION, parseDuration, type DurationDraft } from '@/lib/duration'
+import { formatDuration } from '@/lib/format'
+import { isPreset, MINUTE_PRESETS, minutesPhrase, presetLabel } from '@/lib/minutes'
+import { DurationInput } from './fields'
 import { cn } from '@/lib/utils'
 
 const chip =
@@ -50,18 +52,19 @@ export function TimeFilter({ minutes, onChange }: { minutes: number | null; onCh
 
 function CustomMinutes({ value, onApply }: { value: number | null; onApply: (minutes: number) => void }) {
   const [open, setOpen] = useState(false)
-  const [draft, setDraft] = useState('')
-  const [invalid, setInvalid] = useState(false)
+  const [draft, setDraft] = useState<DurationDraft>(EMPTY_DURATION)
+  const [error, setError] = useState<string | null>(null)
   const active = value !== null
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    const minutes = parseAvailableMinutes(draft)
-    if (minutes === null) {
-      setInvalid(true)
+    const parsed = parseDuration(draft)
+    // Invalid or empty input never reaches the URL or the API.
+    if (!parsed.ok || parsed.minutes === null) {
+      setError(parsed.ok ? 'Enter how much time you have.' : parsed.error)
       return
     }
-    onApply(minutes)
+    onApply(parsed.minutes)
     setOpen(false)
   }
 
@@ -71,8 +74,8 @@ function CustomMinutes({ value, onApply }: { value: number | null; onApply: (min
       onOpenChange={(next) => {
         setOpen(next)
         if (next) {
-          setDraft(value !== null ? String(value) : '')
-          setInvalid(false)
+          setDraft(durationDraftFromMinutes(value))
+          setError(null)
         }
       }}
     >
@@ -80,34 +83,31 @@ function CustomMinutes({ value, onApply }: { value: number | null; onApply: (min
         <button
           type="button"
           aria-pressed={active}
+          aria-label={active ? `Custom time: ${minutesPhrase(value)}` : 'Custom time'}
           data-state={active ? 'on' : 'off'}
           className={cn(chip, 'inline-flex shrink-0 items-center whitespace-nowrap transition-all outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50')}
         >
-          {active ? `${value} min` : 'Custom'}
+          {active ? formatDuration(value) : 'Custom'}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-60">
+      <PopoverContent align="end" className="w-64">
         <form onSubmit={submit} noValidate className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="custom-minutes">Minutes available</Label>
-            <Input
+            <Label htmlFor="custom-minutes">Time available</Label>
+            <DurationInput
               id="custom-minutes"
-              type="number"
-              inputMode="numeric"
-              min={1}
-              step={1}
-              autoFocus
+              label="Time available"
               value={draft}
-              aria-invalid={invalid || undefined}
-              aria-describedby={invalid ? 'custom-minutes-error' : undefined}
-              onChange={(event) => {
-                setDraft(event.target.value)
-                setInvalid(false)
+              autoFocus
+              error={error ?? undefined}
+              onChange={(next) => {
+                setDraft(next)
+                setError(null)
               }}
             />
-            {invalid && (
+            {error && (
               <p id="custom-minutes-error" className="text-xs text-destructive">
-                Enter a whole number of minutes, 1 or more.
+                {error}
               </p>
             )}
           </div>

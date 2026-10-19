@@ -34,6 +34,7 @@ import { ConflictReview } from './ConflictReview'
 import { DeleteTaskDialog } from './DeleteTaskDialog'
 import { DescriptionField, DueByField, DurationField, ImportanceField, MinSessionField, TitleField } from './fields'
 import { ScheduleDialog } from './ScheduleDialog'
+import { SessionLongerWarning } from './SessionLongerWarning'
 
 const STATUS_LABELS: Record<Task['status'], string> = { ACTIVE: 'Active', SCHEDULED: 'Scheduled', COMPLETED: 'Completed' }
 
@@ -236,6 +237,7 @@ export function EditTaskSheet({ task, open, onOpenChange }: { task: Task; open: 
                     error={showErrors ? errors.minSession : undefined}
                   />
                 </div>
+                <SessionLongerWarning draft={draft} />
                 <DueByField value={draft.deadline} onChange={(deadline) => set({ deadline })} />
               </fieldset>
 

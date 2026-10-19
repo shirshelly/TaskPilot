@@ -49,7 +49,7 @@ describe('FocusPanel', () => {
     const { router } = renderWithApp(<FocusPanel />, { route: '/?minutes=45' })
 
     expect(await screen.findByText('Nothing fits in 45 minutes.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '45 min' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Custom time: 45 minutes' })).toHaveAttribute('aria-pressed', 'true')
     // The backend decides eligibility; the hint only explains which duration it looks at.
     expect(screen.getByText(/minimum session — or estimated duration, if there's none — fits/)).toBeInTheDocument()
 
@@ -60,23 +60,34 @@ describe('FocusPanel', () => {
     expect(requestedUrls(fetchMock)).toEqual(['/api/recommendations?availableMinutes=45', '/api/recommendations'])
   })
 
-  it('applies a custom number of minutes and rejects invalid input', async () => {
+  it('applies custom time in minutes or hours and never sends invalid input', async () => {
     const fetchMock = stubFetch(() => json([task()]))
     const { router } = renderWithApp(<FocusPanel />)
     await screen.findByRole('article')
 
-    await userEvent.click(screen.getByRole('button', { name: 'Custom' }))
-    const input = await screen.findByLabelText('Minutes available')
+    await userEvent.click(screen.getByRole('button', { name: 'Custom time' }))
+    const input = await screen.findByLabelText('Time available')
     await userEvent.type(input, '0')
     await userEvent.click(screen.getByRole('button', { name: 'Show tasks' }))
-    expect(screen.getByText('Enter a whole number of minutes, 1 or more.')).toBeInTheDocument()
+    expect(screen.getByText('Use at least 1 minute.')).toBeInTheDocument()
 
     await userEvent.clear(input)
-    await userEvent.type(input, '45')
+    await userEvent.click(within(screen.getByRole('radiogroup', { name: 'Time available unit' })).getByRole('radio', { name: 'Hours' }))
+    await userEvent.type(input, '1.33')
+    await userEvent.click(screen.getByRole('button', { name: 'Show tasks' }))
+    expect(screen.getByText(/isn't a whole number of minutes/)).toBeInTheDocument()
+    expect(router.state.location.search).toBe('')
+
+    await userEvent.clear(input)
+    await userEvent.type(input, '1.5')
     await userEvent.click(screen.getByRole('button', { name: 'Show tasks' }))
 
-    await waitFor(() => expect(router.state.location.search).toBe('?minutes=45'))
-    await waitFor(() => expect(requestedUrls(fetchMock)).toContain('/api/recommendations?availableMinutes=45'))
+    await waitFor(() => expect(router.state.location.search).toBe('?minutes=90'))
+    await waitFor(() => expect(requestedUrls(fetchMock)).toContain('/api/recommendations?availableMinutes=90'))
+    expect(requestedUrls(fetchMock).filter((url) => url.includes('availableMinutes'))).toEqual([
+      '/api/recommendations?availableMinutes=90',
+    ])
+    expect(screen.getByRole('button', { name: 'Custom time: 90 minutes' })).toHaveTextContent('1h 30m')
   })
 
   it('treats an invalid minutes value as Any time and cleans the URL', async () => {

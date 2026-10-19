@@ -82,6 +82,28 @@ describe('EditTaskSheet', () => {
     expect(patchCalls(mock)).toEqual([{ body: { minSessionMinutes: null }, ifMatch: '"3"' }])
   })
 
+  it('shows 90 minutes as 1.5 h, sends nothing for a unit switch, and whole minutes for a real change', async () => {
+    const timed = { ...base, estimatedDurationMinutes: 90 }
+    const { mock } = fakeServer(timed)
+    const { onOpenChange } = openSheet(timed)
+    const input = screen.getByLabelText('Estimated duration')
+    const unit = screen.getByRole('radiogroup', { name: 'Estimated duration unit' })
+    expect(input).toHaveValue('1.5')
+    expect(within(unit).getByRole('radio', { name: 'Hours' })).toBeChecked()
+
+    await userEvent.click(within(unit).getByRole('radio', { name: 'Minutes' }))
+    expect(input).toHaveValue('90')
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+
+    await userEvent.click(within(unit).getByRole('radio', { name: 'Hours' }))
+    await userEvent.clear(input)
+    await userEvent.type(input, '2.25')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+    expect(patchCalls(mock)).toEqual([{ body: { estimatedDurationMinutes: 135 }, ifMatch: '"3"' }])
+  })
+
   it('on a version conflict keeps the draft, explains the differences, and saves only my fields over the latest after confirming the overlap', async () => {
     const { server, mock } = fakeServer(base)
     const { onOpenChange } = openSheet()

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Task } from '@/api/types'
 import { json, renderWithApp, stubFetch, task } from '@/test/render'
@@ -97,7 +97,48 @@ describe('QuickCreateDialog', () => {
     await userEvent.type(screen.getByLabelText('Minimum session'), '0')
     await userEvent.click(screen.getByRole('button', { name: 'Add task' }))
 
-    expect(screen.getByText('Use a whole number of minutes, 1 or more.')).toBeInTheDocument()
+    expect(screen.getByText('Use at least 1 minute.')).toBeInTheDocument()
+    expect(bodies(fetchMock, 'POST')).toEqual([])
+  })
+
+  it('accepts hours, sends whole minutes, and warns (without blocking) when the session is longer than the total', async () => {
+    const fetchMock = stubFetch((_url, init) => (init?.method === 'POST' ? json(task({ title: 'Thesis' }), 201) : json([])))
+    renderWithApp(<QuickCreateDialog open onOpenChange={() => {}} />)
+
+    await userEvent.type(screen.getByLabelText('Title'), 'Thesis')
+    await userEvent.click(screen.getByRole('button', { name: 'More options' }))
+    const total = screen.getByRole('radiogroup', { name: 'Estimated duration unit' })
+    await userEvent.click(within(total).getByRole('radio', { name: 'Hours' }))
+    await userEvent.type(screen.getByLabelText('Estimated duration'), '1.5')
+    await userEvent.type(screen.getByLabelText('Minimum session'), '120')
+
+    const warning = 'Minimum session is longer than the estimated total duration. Is that intentional?'
+    expect(screen.getByText(warning)).toBeInTheDocument()
+    await userEvent.clear(screen.getByLabelText('Minimum session'))
+    await userEvent.type(screen.getByLabelText('Minimum session'), '30')
+    expect(screen.queryByText(warning)).not.toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText('Minimum session'), '0') // 300 min: warning back, still savable
+    expect(screen.getByText(warning)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Add task' }))
+
+    await waitFor(() =>
+      expect(bodies(fetchMock, 'POST')).toEqual([
+        { title: 'Thesis', importance: 3, estimatedDurationMinutes: 90, minSessionMinutes: 300 },
+      ]),
+    )
+  })
+
+  it('rejects hours that are not a whole number of minutes instead of rounding', async () => {
+    const fetchMock = stubFetch(() => json([]))
+    renderWithApp(<QuickCreateDialog open onOpenChange={() => {}} />)
+
+    await userEvent.type(screen.getByLabelText('Title'), 'Odd')
+    await userEvent.click(screen.getByRole('button', { name: 'More options' }))
+    await userEvent.click(within(screen.getByRole('radiogroup', { name: 'Estimated duration unit' })).getByRole('radio', { name: 'Hours' }))
+    await userEvent.type(screen.getByLabelText('Estimated duration'), '1.33')
+    await userEvent.click(screen.getByRole('button', { name: 'Add task' }))
+
+    expect(screen.getByText(/isn't a whole number of minutes/)).toBeInTheDocument()
     expect(bodies(fetchMock, 'POST')).toEqual([])
   })
 
