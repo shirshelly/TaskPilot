@@ -103,6 +103,8 @@ function formatValue(field: EditableField, values: EditableValues, today: string
       return String(values.importance)
     case 'estimatedDurationMinutes':
       return values.estimatedDurationMinutes === null ? 'no estimate' : formatDuration(values.estimatedDurationMinutes)
+    case 'minSessionMinutes':
+      return values.minSessionMinutes === null ? 'none' : formatDuration(values.minSessionMinutes)
     case 'deadline':
       return values.deadline === null ? 'none' : formatCalendarDate(values.deadline, today)
   }

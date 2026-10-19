@@ -9,7 +9,10 @@ export interface Task {
   description: string | null
   status: TaskStatus
   importance: number
+  /** Total time to finish the task. */
   estimatedDurationMinutes: number | null
+  /** Shortest useful sitting, for work spread over several sessions. */
+  minSessionMinutes: number | null
   deadline: string | null
   scheduledFor: string | null
   createdAt: string
@@ -26,6 +29,7 @@ export interface CreateTaskRequest {
   description?: string
   importance?: number
   estimatedDurationMinutes?: number
+  minSessionMinutes?: number
   deadline?: string
   scheduledFor?: string
 }
@@ -40,6 +44,7 @@ export interface TaskPatch {
   description?: string | null
   importance?: number
   estimatedDurationMinutes?: number | null
+  minSessionMinutes?: number | null
   deadline?: string | null
 }
 

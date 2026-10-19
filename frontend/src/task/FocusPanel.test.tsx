@@ -50,7 +50,8 @@ describe('FocusPanel', () => {
 
     expect(await screen.findByText('Nothing fits in 45 minutes.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '45 min' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByText("Tasks without a time estimate aren't included.")).toBeInTheDocument()
+    // The backend decides eligibility; the hint only explains which duration it looks at.
+    expect(screen.getByText(/minimum session — or estimated duration, if there's none — fits/)).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Show all (Any time)' }))
 

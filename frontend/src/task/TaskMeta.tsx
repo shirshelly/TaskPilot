@@ -41,10 +41,18 @@ export function TaskMeta({ task, showStatus = false, className }: { task: Task; 
   if (task.deadline) {
     items.push(<Item key="due" icon={<Flag />} title="Due by">{formatDeadline(task.deadline, today)}</Item>)
   }
-  if (task.estimatedDurationMinutes !== null) {
+  // Total and minimum session share one item ("10h · 10m min. session") to keep rows short.
+  if (task.estimatedDurationMinutes !== null || task.minSessionMinutes !== null) {
     items.push(
-      <Item key="duration" icon={<Clock3 />} title="Estimated duration">
-        {formatDuration(task.estimatedDurationMinutes)}
+      <Item key="duration" icon={<Clock3 />}>
+        {task.estimatedDurationMinutes !== null && (
+          <>
+            <span className="sr-only">Estimated duration: </span>
+            {formatDuration(task.estimatedDurationMinutes)}
+          </>
+        )}
+        {task.estimatedDurationMinutes !== null && task.minSessionMinutes !== null && ' · '}
+        {task.minSessionMinutes !== null && <>{formatDuration(task.minSessionMinutes)} min. session</>}
       </Item>,
     )
   }

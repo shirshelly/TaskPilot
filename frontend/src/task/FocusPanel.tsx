@@ -52,7 +52,9 @@ export function FocusPanel({ className }: { className?: string }) {
       <SectionHeader id="focus-heading" title="Focus" />
       <TimeFilter minutes={minutes} onChange={setMinutes} />
       {minutes !== null && (
-        <p className="mt-2 text-xs text-muted-foreground">Tasks without a time estimate aren't included.</p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Shows tasks whose minimum session — or estimated duration, if there's none — fits this time.
+        </p>
       )}
 
       <div className="mt-5">

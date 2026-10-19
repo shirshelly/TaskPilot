@@ -32,7 +32,7 @@ import { useIsTaskBusy, useReopenTask, useUpdateTask } from '@/queries/mutations
 import { useTask } from '@/queries/queries'
 import { ConflictReview } from './ConflictReview'
 import { DeleteTaskDialog } from './DeleteTaskDialog'
-import { DescriptionField, DueByField, DurationField, ImportanceField, TitleField } from './fields'
+import { DescriptionField, DueByField, DurationField, ImportanceField, MinSessionField, TitleField } from './fields'
 import { ScheduleDialog } from './ScheduleDialog'
 
 const STATUS_LABELS: Record<Task['status'], string> = { ACTIVE: 'Active', SCHEDULED: 'Scheduled', COMPLETED: 'Completed' }
@@ -223,12 +223,17 @@ export function EditTaskSheet({ task, open, onOpenChange }: { task: Task; open: 
               <fieldset disabled={deleted} className="space-y-5">
                 <TitleField value={draft.title} onChange={(title) => set({ title })} error={showErrors ? errors.title : undefined} />
                 <DescriptionField value={draft.description} onChange={(description) => set({ description })} />
+                <ImportanceField value={draft.importance} onChange={(importance) => set({ importance })} />
                 <div className="grid gap-5 sm:grid-cols-2">
-                  <ImportanceField value={draft.importance} onChange={(importance) => set({ importance })} />
                   <DurationField
                     value={draft.duration}
                     onChange={(duration) => set({ duration })}
                     error={showErrors ? errors.duration : undefined}
+                  />
+                  <MinSessionField
+                    value={draft.minSession}
+                    onChange={(minSession) => set({ minSession })}
+                    error={showErrors ? errors.minSession : undefined}
                   />
                 </div>
                 <DueByField value={draft.deadline} onChange={(deadline) => set({ deadline })} />

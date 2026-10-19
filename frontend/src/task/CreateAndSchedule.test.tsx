@@ -68,6 +68,39 @@ describe('QuickCreateDialog', () => {
     expect(await screen.findByText('Scheduled “Dentist”')).toBeInTheDocument()
   })
 
+  it('sends a minimum session only when one is entered', async () => {
+    const fetchMock = stubFetch((_url, init) =>
+      init?.method === 'POST' ? json(task({ title: 'Read a book', estimatedDurationMinutes: 600, minSessionMinutes: 10 }), 201) : json([]),
+    )
+    renderWithApp(<QuickCreateDialog open onOpenChange={() => {}} />)
+
+    await userEvent.type(screen.getByLabelText('Title'), 'Read a book')
+    await userEvent.click(screen.getByRole('button', { name: 'More options' }))
+    await userEvent.type(screen.getByLabelText('Estimated duration'), '600')
+    await userEvent.type(screen.getByLabelText('Minimum session'), '10')
+    expect(screen.getByText('Shortest useful amount of time you can spend on this task.')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Add task' }))
+
+    await waitFor(() =>
+      expect(bodies(fetchMock, 'POST')).toEqual([
+        { title: 'Read a book', importance: 3, estimatedDurationMinutes: 600, minSessionMinutes: 10 },
+      ]),
+    )
+  })
+
+  it('rejects a minimum session that is not a positive whole number', async () => {
+    const fetchMock = stubFetch(() => json([]))
+    renderWithApp(<QuickCreateDialog open onOpenChange={() => {}} />)
+
+    await userEvent.type(screen.getByLabelText('Title'), 'Read a book')
+    await userEvent.click(screen.getByRole('button', { name: 'More options' }))
+    await userEvent.type(screen.getByLabelText('Minimum session'), '0')
+    await userEvent.click(screen.getByRole('button', { name: 'Add task' }))
+
+    expect(screen.getByText('Use a whole number of minutes, 1 or more.')).toBeInTheDocument()
+    expect(bodies(fetchMock, 'POST')).toEqual([])
+  })
+
   it('requires a title before sending anything', async () => {
     const fetchMock = stubFetch(() => json([]))
     renderWithApp(<QuickCreateDialog open onOpenChange={() => {}} />)

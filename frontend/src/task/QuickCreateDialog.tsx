@@ -11,7 +11,15 @@ import { describeActionError } from '@/lib/errorMessages'
 import { formatSchedule, inSentence } from '@/lib/format'
 import { buildCreateRequest, EMPTY_DRAFT, validateDraft, type StartOnInput, type TaskDraft } from '@/lib/patch'
 import { useCreateTask } from '@/queries/mutations'
-import { DescriptionField, DueByField, DurationField, ImportanceField, StartOnField, TitleField } from './fields'
+import {
+  DescriptionField,
+  DueByField,
+  DurationField,
+  ImportanceField,
+  MinSessionField,
+  StartOnField,
+  TitleField,
+} from './fields'
 import { StartAfterDueWarning } from './StartAfterDueWarning'
 
 /** Title + Enter is enough; everything else lives behind "More options". */
@@ -32,7 +40,7 @@ export function QuickCreateDialog({ open, onOpenChange }: { open: boolean; onOpe
     if (create.isPending) return
     if (Object.keys(errors).length > 0) {
       setShowErrors(true)
-      if (errors.duration) setMoreOpen(true)
+      if (errors.duration || errors.minSession) setMoreOpen(true)
       return
     }
     create.mutate(buildCreateRequest(draft, startOn, zone), {
@@ -83,12 +91,17 @@ export function QuickCreateDialog({ open, onOpenChange }: { open: boolean; onOpe
               </CollapsibleTrigger>
               <CollapsibleContent className="space-y-4 pt-4">
                 <DescriptionField value={draft.description} onChange={(description) => update({ description })} />
+                <ImportanceField value={draft.importance} onChange={(importance) => update({ importance })} />
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <ImportanceField value={draft.importance} onChange={(importance) => update({ importance })} />
                   <DurationField
                     value={draft.duration}
                     onChange={(duration) => update({ duration })}
                     error={showErrors ? errors.duration : undefined}
+                  />
+                  <MinSessionField
+                    value={draft.minSession}
+                    onChange={(minSession) => update({ minSession })}
+                    error={showErrors ? errors.minSession : undefined}
                   />
                 </div>
                 <StartOnField value={startOn} onChange={setStartOn} minDate={today} />

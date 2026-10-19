@@ -70,6 +70,18 @@ describe('EditTaskSheet', () => {
     expect(patchCalls(mock)).toEqual([{ body: { title: 'Write the report', deadline: null }, ifMatch: '"3"' }])
   })
 
+  it('clears the minimum session with an explicit null and leaves the total alone', async () => {
+    const ongoing = { ...base, estimatedDurationMinutes: 600, minSessionMinutes: 10 }
+    const { mock } = fakeServer(ongoing)
+    const { onOpenChange } = openSheet(ongoing)
+
+    await userEvent.clear(screen.getByLabelText('Minimum session'))
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+    expect(patchCalls(mock)).toEqual([{ body: { minSessionMinutes: null }, ifMatch: '"3"' }])
+  })
+
   it('on a version conflict keeps the draft, explains the differences, and saves only my fields over the latest after confirming the overlap', async () => {
     const { server, mock } = fakeServer(base)
     const { onOpenChange } = openSheet()

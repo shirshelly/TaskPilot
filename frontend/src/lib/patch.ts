@@ -9,13 +9,22 @@ export interface TaskDraft {
   title: string
   description: string
   importance: number
-  /** Whole minutes as typed; '' means no estimate. */
+  /** Total estimate in whole minutes as typed; '' means no estimate. */
   duration: string
+  /** Minimum session in whole minutes as typed; '' means none. */
+  minSession: string
   /** 'YYYY-MM-DD' or ''. */
   deadline: string
 }
 
-export const EDITABLE_FIELDS = ['title', 'description', 'importance', 'estimatedDurationMinutes', 'deadline'] as const
+export const EDITABLE_FIELDS = [
+  'title',
+  'description',
+  'importance',
+  'estimatedDurationMinutes',
+  'minSessionMinutes',
+  'deadline',
+] as const
 export type EditableField = (typeof EDITABLE_FIELDS)[number]
 
 /** The editable fields in API shape (null = empty). */
@@ -24,6 +33,7 @@ export interface EditableValues {
   description: string | null
   importance: number
   estimatedDurationMinutes: number | null
+  minSessionMinutes: number | null
   deadline: string | null
 }
 
@@ -32,6 +42,7 @@ export const FIELD_LABELS: Record<EditableField, string> = {
   description: 'Description',
   importance: 'Importance',
   estimatedDurationMinutes: 'Estimated duration',
+  minSessionMinutes: 'Minimum session',
   deadline: 'Due by',
 }
 
@@ -40,7 +51,8 @@ export function draftFromTask(task: Task): TaskDraft {
     title: task.title,
     description: task.description ?? '',
     importance: task.importance,
-    duration: task.estimatedDurationMinutes === null ? '' : String(task.estimatedDurationMinutes),
+    duration: minutesText(task.estimatedDurationMinutes),
+    minSession: minutesText(task.minSessionMinutes),
     deadline: task.deadline ?? '',
   }
 }
@@ -51,37 +63,53 @@ export function valuesFromTask(task: Task): EditableValues {
     description: task.description,
     importance: task.importance,
     estimatedDurationMinutes: task.estimatedDurationMinutes,
+    minSessionMinutes: task.minSessionMinutes,
     deadline: task.deadline,
   }
 }
 
 /**
  * Draft → API values. Title is trimmed; a blank description, duration or deadline means "none".
- * Only call on a draft that passed validateDraft (duration is then a positive integer or '').
+ * Only call on a draft that passed validateDraft (minutes are then positive integers or '').
  */
 export function valuesFromDraft(draft: TaskDraft): EditableValues {
   const description = draft.description.trim() === '' ? null : draft.description
-  const duration = draft.duration.trim()
   return {
     title: draft.title.trim(),
     description,
     importance: draft.importance,
-    estimatedDurationMinutes: duration === '' ? null : Number(duration),
+    estimatedDurationMinutes: minutesValue(draft.duration),
+    minSessionMinutes: minutesValue(draft.minSession),
     deadline: draft.deadline === '' ? null : draft.deadline,
   }
 }
 
-export type DraftErrors = Partial<Record<'title' | 'duration', string>>
+export type DraftErrors = Partial<Record<'title' | 'duration' | 'minSession', string>>
+
+const MINUTES_ERROR = 'Use a whole number of minutes, 1 or more.'
 
 /** Fast feedback for obviously invalid input. The backend still validates everything. */
 export function validateDraft(draft: TaskDraft): DraftErrors {
   const errors: DraftErrors = {}
   if (draft.title.trim() === '') errors.title = 'Give the task a title.'
-  const duration = draft.duration.trim()
-  if (duration !== '' && !(/^\d+$/.test(duration) && Number(duration) > 0 && Number(duration) <= 999_999)) {
-    errors.duration = 'Use a whole number of minutes, 1 or more.'
-  }
+  if (!isValidMinutes(draft.duration)) errors.duration = MINUTES_ERROR
+  if (!isValidMinutes(draft.minSession)) errors.minSession = MINUTES_ERROR
   return errors
+}
+
+/** '' (none) or a positive whole number of minutes. */
+function isValidMinutes(text: string): boolean {
+  const value = text.trim()
+  return value === '' || (/^\d+$/.test(value) && Number(value) > 0 && Number(value) <= 999_999)
+}
+
+function minutesValue(text: string): number | null {
+  const value = text.trim()
+  return value === '' ? null : Number(value)
+}
+
+function minutesText(minutes: number | null): string {
+  return minutes === null ? '' : String(minutes)
 }
 
 /**
@@ -129,6 +157,7 @@ export function rebaseDraft(base: Task, draft: TaskDraft, latest: Task): Rebase 
     else if (field === 'description') rebased.description = draft.description
     else if (field === 'importance') rebased.importance = draft.importance
     else if (field === 'estimatedDurationMinutes') rebased.duration = draft.duration
+    else if (field === 'minSessionMinutes') rebased.minSession = draft.minSession
     else rebased.deadline = draft.deadline
   }
   const overlaps = mine.filter((field) => theirs.has(field) && latestValues[field] !== myValues[field])
@@ -157,10 +186,11 @@ export function buildCreateRequest(draft: TaskDraft, startOn: StartOnInput, zone
   const request: CreateTaskRequest = { title: values.title, importance: values.importance }
   if (values.description !== null) request.description = values.description
   if (values.estimatedDurationMinutes !== null) request.estimatedDurationMinutes = values.estimatedDurationMinutes
+  if (values.minSessionMinutes !== null) request.minSessionMinutes = values.minSessionMinutes
   if (values.deadline !== null) request.deadline = values.deadline
   const scheduledFor = scheduledForFromInput(startOn, zone)
   if (scheduledFor !== undefined) request.scheduledFor = scheduledFor
   return request
 }
 
-export const EMPTY_DRAFT: TaskDraft = { title: '', description: '', importance: 3, duration: '', deadline: '' }
+export const EMPTY_DRAFT: TaskDraft = { title: '', description: '', importance: 3, duration: '', minSession: '', deadline: '' }

@@ -45,10 +45,17 @@ describe('buildPatch', () => {
     expect(buildPatch(base, draft)).toEqual({ estimatedDurationMinutes: 90, importance: 5, deadline: '2026-11-01' })
   })
 
+  it('treats the minimum session like the other nullable minutes field', () => {
+    const ongoing = task({ estimatedDurationMinutes: 600, minSessionMinutes: 10 })
+    expect(buildPatch(ongoing, { ...draftFromTask(ongoing), minSession: '15' })).toEqual({ minSessionMinutes: 15 })
+    expect(buildPatch(ongoing, { ...draftFromTask(ongoing), minSession: '' })).toEqual({ minSessionMinutes: null })
+    expect(buildPatch(ongoing, { ...draftFromTask(ongoing), title: 'x' })).not.toHaveProperty('minSessionMinutes')
+  })
+
   it('never contains lifecycle fields', () => {
-    const draft = { ...draftFromTask(base), title: 'x', description: '', duration: '1', importance: 1, deadline: '' }
+    const draft = { title: 'x', description: '', duration: '1', minSession: '5', importance: 1, deadline: '' }
     expect(Object.keys(buildPatch(base, draft)).sort()).toEqual(
-      ['deadline', 'description', 'estimatedDurationMinutes', 'importance', 'title'].sort(),
+      ['deadline', 'description', 'estimatedDurationMinutes', 'importance', 'minSessionMinutes', 'title'].sort(),
     )
   })
 })
@@ -82,6 +89,14 @@ describe('conflict rebase', () => {
     expect(buildPatch(latest, draft)).toEqual({})
   })
 
+  it('re-applies a changed minimum session without touching the server-changed total', () => {
+    const ongoing = task({ estimatedDurationMinutes: 600, minSessionMinutes: 10, version: 1 })
+    const latestOngoing = { ...ongoing, estimatedDurationMinutes: 900, version: 2 }
+    const { draft, overlaps } = rebaseDraft(ongoing, { ...draftFromTask(ongoing), minSession: '20' }, latestOngoing)
+    expect(overlaps).toEqual([])
+    expect(buildPatch(latestOngoing, draft)).toEqual({ minSessionMinutes: 20 })
+  })
+
   it('treats clearing a field the server also changed as an overlap', () => {
     const cleared = { ...draftFromTask(base), description: '' }
     const { overlaps, draft } = rebaseDraft(base, cleared, latest)
@@ -96,6 +111,10 @@ describe('validateDraft', () => {
     expect(validateDraft({ ...EMPTY_DRAFT, title: 'x', duration: '0' })).toHaveProperty('duration')
     expect(validateDraft({ ...EMPTY_DRAFT, title: 'x', duration: '1.5' })).toHaveProperty('duration')
     expect(validateDraft({ ...EMPTY_DRAFT, title: 'x', duration: '' })).toEqual({})
+    expect(validateDraft({ ...EMPTY_DRAFT, title: 'x', minSession: '0' })).toHaveProperty('minSession')
+    expect(validateDraft({ ...EMPTY_DRAFT, title: 'x', minSession: '-5' })).toHaveProperty('minSession')
+    expect(validateDraft({ ...EMPTY_DRAFT, title: 'x', minSession: '2.5' })).toHaveProperty('minSession')
+    expect(validateDraft({ ...EMPTY_DRAFT, title: 'x', minSession: '10' })).toEqual({})
   })
 })
 
@@ -115,7 +134,7 @@ describe('buildCreateRequest', () => {
   })
 
   it('includes every filled optional field, with the deadline as a plain date', () => {
-    const draft = { title: 'x', description: 'notes', importance: 5, duration: '30', deadline: '2026-10-30' }
+    const draft = { title: 'x', description: 'notes', importance: 5, duration: '30', minSession: '', deadline: '2026-10-30' }
     expect(buildCreateRequest(draft, { date: '2026-10-21', time: '16:30' }, zone)).toEqual({
       title: 'x',
       description: 'notes',

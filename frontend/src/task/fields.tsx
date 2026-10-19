@@ -120,9 +120,49 @@ export function ImportanceField({ value, onChange }: { value: number; onChange: 
 }
 
 export function DurationField({ value, onChange, error }: { value: string; onChange: (value: string) => void; error?: string }) {
+  return (
+    <MinutesField
+      label="Estimated duration"
+      hint="Total time to finish the whole task."
+      placeholder="No estimate"
+      value={value}
+      onChange={onChange}
+      error={error}
+    />
+  )
+}
+
+export function MinSessionField({ value, onChange, error }: { value: string; onChange: (value: string) => void; error?: string }) {
+  return (
+    <MinutesField
+      label="Minimum session"
+      hint="Shortest useful amount of time you can spend on this task."
+      placeholder="Optional"
+      value={value}
+      onChange={onChange}
+      error={error}
+    />
+  )
+}
+
+function MinutesField({
+  label,
+  hint,
+  placeholder,
+  value,
+  onChange,
+  error,
+}: {
+  label: string
+  hint: string
+  placeholder: string
+  value: string
+  onChange: (value: string) => void
+  error?: string
+}) {
   const id = useId()
   return (
-    <Field label="Estimated duration" htmlFor={id} error={error} hint="Used when you pick how much time you have.">
+    <Field label={label} htmlFor={id} error={error} hint={hint}>
       <div className="relative">
         <Input
           id={id}
@@ -130,7 +170,7 @@ export function DurationField({ value, onChange, error }: { value: string; onCha
           inputMode="numeric"
           min={1}
           step={1}
-          placeholder="No estimate"
+          placeholder={placeholder}
           value={value}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${id}-error` : undefined}
