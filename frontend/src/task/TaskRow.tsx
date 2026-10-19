@@ -13,7 +13,8 @@ import {
 import { actionsFor } from '@/lib/actions'
 import { describeActionError } from '@/lib/errorMessages'
 import { cn } from '@/lib/utils'
-import { useCompleteTask, useIsTaskBusy, useReopenTask } from '@/queries/mutations'
+import { useIsTaskBusy, useReopenTask } from '@/queries/mutations'
+import { useCompletionFlow } from './useCompletionFlow'
 import { TaskMeta } from './TaskMeta'
 
 /**
@@ -50,20 +51,14 @@ export function TaskRow({ task, showStatus = false }: { task: Task; showStatus?:
   )
 }
 
-/** Round checkbox. Completing is server-confirmed: it spins until the lists have refreshed. */
+/**
+ * Round checkbox. Completing is server-confirmed: it spins until the lists have refreshed. For a
+ * task worked on in sessions it first asks what was finished (see useCompletionFlow.ts).
+ */
 export function CompleteToggle({ task, className }: { task: Task; className?: string }) {
-  // Callbacks on the hook, not on mutate(): the row may leave the list before the request settles.
-  const complete = useCompleteTask(task.id, {
-    onSuccess: (done) => toast.success(`Completed “${done.title}”`),
-    onError: (error) => toast.error(describeActionError(error)),
-  })
-  const busy = useIsTaskBusy(task.id)
+  const completion = useCompletionFlow(task)
+  const busy = completion.busy
   const completed = task.status === 'COMPLETED'
-
-  const onClick = () => {
-    if (busy || completed) return
-    complete.mutate()
-  }
 
   return (
     <button
@@ -71,8 +66,9 @@ export function CompleteToggle({ task, className }: { task: Task; className?: st
       role="checkbox"
       aria-checked={completed}
       aria-label={completed ? `“${task.title}” is completed` : `Complete “${task.title}”`}
+      aria-haspopup={completion.asksFirst && !completed ? 'dialog' : undefined}
       disabled={completed || busy}
-      onClick={onClick}
+      onClick={completion.start}
       className={cn(
         'group/check grid size-[18px] shrink-0 place-items-center rounded-full border-[1.5px] outline-none transition-colors',
         'focus-visible:ring-[3px] focus-visible:ring-ring/50',
@@ -83,7 +79,7 @@ export function CompleteToggle({ task, className }: { task: Task; className?: st
         className,
       )}
     >
-      {complete.isPending ? (
+      {completion.isPending ? (
         <Loader2 className="size-3 animate-spin text-brand" aria-hidden="true" />
       ) : (
         <Check

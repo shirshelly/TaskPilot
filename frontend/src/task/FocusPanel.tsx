@@ -1,16 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Check, Loader2 } from 'lucide-react'
-import { toast } from 'sonner'
 import { useSearchParams } from 'react-router'
 import type { Task } from '@/api/types'
 import { useTaskOverlays } from '@/app/taskOverlays'
 import { Button } from '@/components/ui/button'
 import { EmptyState, ErrorState, ListSkeleton, RefreshFailedNote, SectionHeader } from '@/components/states'
 import { Skeleton } from '@/components/ui/skeleton'
-import { describeActionError } from '@/lib/errorMessages'
 import { MINUTES_PARAM, minutesPhrase, parseAvailableMinutes } from '@/lib/minutes'
 import { cn } from '@/lib/utils'
-import { useCompleteTask, useIsTaskBusy } from '@/queries/mutations'
+import { useIsTaskBusy } from '@/queries/mutations'
+import { useCompletionFlow } from './useCompletionFlow'
 import { useRecommendations } from '@/queries/queries'
 import { TaskMeta } from './TaskMeta'
 import { TaskRow } from './TaskRow'
@@ -131,10 +130,7 @@ function Recommendations({ tasks, minutes, onShowAll }: { tasks: Task[]; minutes
 function FeaturedTask({ task }: { task: Task }) {
   const overlays = useTaskOverlays()
   const busy = useIsTaskBusy(task.id)
-  const complete = useCompleteTask(task.id, {
-    onSuccess: (done) => toast.success(`Completed “${done.title}”`),
-    onError: (error) => toast.error(describeActionError(error)),
-  })
+  const completion = useCompletionFlow(task)
   return (
     <article
       aria-labelledby="featured-title"
@@ -152,8 +148,13 @@ function FeaturedTask({ task }: { task: Task }) {
       {task.description && <p className="mt-2 line-clamp-3 text-sm text-muted-foreground">{task.description}</p>}
       <TaskMeta task={task} className="mt-4" />
       <div className="mt-5 flex flex-wrap gap-2">
-        <Button onClick={() => !busy && complete.mutate()} disabled={busy} aria-busy={complete.isPending}>
-          {complete.isPending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Check aria-hidden="true" />}
+        <Button
+          onClick={completion.start}
+          disabled={busy}
+          aria-busy={completion.isPending}
+          aria-haspopup={completion.asksFirst ? 'dialog' : undefined}
+        >
+          {completion.isPending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Check aria-hidden="true" />}
           Mark done
         </Button>
         <Button variant="ghost" onClick={() => overlays.openEdit(task)} disabled={busy}>

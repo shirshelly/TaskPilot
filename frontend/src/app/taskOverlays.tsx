@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 import type { Task } from '@/api/types'
+import { SessionCompletionDialog } from '@/task/SessionCompletionDialog'
 import { DeleteTaskDialog } from '@/task/DeleteTaskDialog'
 import { EditTaskSheet } from '@/task/EditTaskSheet'
 import { QuickCreateDialog } from '@/task/QuickCreateDialog'
@@ -10,6 +11,8 @@ interface TaskOverlays {
   openEdit: (task: Task) => void
   openSchedule: (task: Task) => void
   openDelete: (task: Task) => void
+  /** Only via useCompletionFlow: the "done for now / finished" choice for session-based tasks. */
+  openCompletionChoice: (task: Task) => void
 }
 
 const TaskOverlaysContext = createContext<TaskOverlays | null>(null)
@@ -39,6 +42,7 @@ export function TaskOverlaysProvider({ children }: { children: ReactNode }) {
   const [edit, openEdit, setEditOpen] = useOverlay()
   const [schedule, openSchedule, setScheduleOpen] = useOverlay()
   const [remove, openDelete, setDeleteOpen] = useOverlay()
+  const [completion, openCompletionChoice, setCompletionOpen] = useOverlay()
 
   const value = useMemo<TaskOverlays>(
     () => ({
@@ -46,8 +50,9 @@ export function TaskOverlaysProvider({ children }: { children: ReactNode }) {
       openEdit,
       openSchedule,
       openDelete,
+      openCompletionChoice,
     }),
-    [openCreate, openEdit, openSchedule, openDelete],
+    [openCreate, openEdit, openSchedule, openDelete, openCompletionChoice],
   )
 
   return (
@@ -68,6 +73,14 @@ export function TaskOverlaysProvider({ children }: { children: ReactNode }) {
           task={schedule.task}
           open={schedule.open}
           onOpenChange={setScheduleOpen}
+        />
+      )}
+      {completion.task && (
+        <SessionCompletionDialog
+          key={`complete-${completion.session}`}
+          task={completion.task}
+          open={completion.open}
+          onOpenChange={setCompletionOpen}
         />
       )}
       {remove.task && (
