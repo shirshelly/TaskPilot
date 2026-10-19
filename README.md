@@ -1,71 +1,131 @@
 # TaskPilot
 
-A backend-focused, single-user personal task manager. It answers two questions:
+A single-user personal task manager built to answer two questions well:
 
-1. **What do I have today?** → `GET /agenda/today`
-2. **What should I focus on right now?** → `GET /recommendations`
+1. **What do I have today?** — a time-critical Agenda.
+2. **What should I focus on right now?** — ranked recommendations that fit the time you have.
 
-The project is deliberately small in scope and is meant to show backend engineering — domain
-modeling, a lifecycle state machine, transactions, concurrency, scheduling, and time handling —
-rather than CRUD alone. The full design lives in [`docs/V1-DESIGN.md`](docs/V1-DESIGN.md).
+It's a **backend-focused** portfolio project: a Spring Boot service with a real domain model, a
+lifecycle state machine, transactions and optimistic locking, background activation, and
+timezone-correct date logic — plus a deliberately small React frontend that presents the
+backend's decisions without re-implementing them.
 
-## Tech Stack
+![Today: Agenda first, with the Focus panel beside it](docs/screenshots/today.png)
 
-Java 21 · Spring Boot 4.1 · Spring Data JPA / Hibernate · PostgreSQL 16 · Flyway ·
-JUnit 5 · AssertJ · Mockito · Testcontainers
+## What it does
 
-## What Makes It More Than CRUD
+- **Agenda (Today).** Everything scheduled for today or due by today, rolled over until handled,
+  ordered by urgency: missed deadlines, missed schedules, due today, due within three days, then
+  by scheduled time. Dates only — no hidden scoring.
+- **Focus (Recommendations).** "I have 30 minutes — what should I do?" Active tasks that fit the
+  time, ranked deterministically by importance, deadline urgency and age. The top pick is
+  featured; alternatives follow in the backend's order.
+- **Start on vs. Due by.** A task can be hidden until a start date (`scheduledFor`) and/or have a
+  deadline; the two are separate concepts. A background worker activates scheduled tasks on their
+  date, and catches up after downtime.
+- **Work in sessions.** A task can have an estimated total (*Read a book: 10 h*) and a
+  **minimum session** (*10 min*). With a time limit, a task qualifies if a session fits, so long
+  projects still get recommended for short slots. Completing such a task asks
+  *"What did you finish?"* — **I'm done for now** (nothing changes) or **I finished the entire
+  task** — so a short session can't complete a project by accident.
+- **Safe editing.** Edits send a minimal `PATCH` with `If-Match`. If the task changed elsewhere,
+  your draft is kept and you can review the differences, discard, or save only your own changes
+  over the latest version.
+- **History.** Completed tasks are grouped by day, week and month in collapsible sections.
 
-- **Rich domain model.** `Task` owns its lifecycle (`complete`, `reopen`, `schedule`,
-  `activate`) and invariants. There is no way to set `status` directly — not in the API, not via
-  setters.
-- **Schema owned by Flyway.** Hibernate runs with `ddl-auto=validate`; the database also enforces
-  invariants with `CHECK` constraints (e.g. `COMPLETED ⇔ completed_at IS NOT NULL`).
-- **Explicit transaction boundaries** in the service layer, using JPA dirty checking.
-- **Optimistic locking** (`@Version`): a stale API write returns `409`; in the background worker it
-  skips only the affected task. `PATCH` also accepts `If-Match: "<version>"`, so an edit based on
-  an outdated read is refused with `412` before anything is applied.
-- **Timezone-aware date semantics.** All time logic uses an injected `Clock` and one configured
-  zone (`app.zone-id`). Date-based queries compare `TIMESTAMPTZ` values against zone-derived
-  instant bounds, so results never depend on the JVM or database session timezone.
-- **Scheduled background activation** of due tasks, recoverable after downtime.
-- **Business queries, not just lists:** the Agenda and a deterministic recommendation ranking.
-- **Consistent error semantics:** `400` invalid input, `404` missing task, `409` invalid lifecycle
-  transition or concurrent modification — as RFC 9457 Problem Details with a stable `code`
-  (`VALIDATION_FAILED`, `TASK_NOT_FOUND`, `INVALID_STATE_TRANSITION`, `VERSION_CONFLICT`, …) so
-  clients never parse messages.
-- **Integration tests against real PostgreSQL** (Testcontainers), not H2.
+| Focus with 30 minutes | Session-aware completion | Edit conflict review |
+|---|---|---|
+| ![Focus panel filtered to 30 minutes](docs/screenshots/focus-30-minutes.png) | ![What did you finish? dialog](docs/screenshots/session-completion.png) | ![Conflict review in the edit sheet](docs/screenshots/conflict-review.png) |
 
-## Core Semantics
+More screenshots: [completed groups](docs/screenshots/completed-groups.png),
+[quick create with hours](docs/screenshots/quick-create.png),
+[edit sheet](docs/screenshots/edit-sheet.png), [mobile Today](docs/screenshots/today-mobile.png),
+[mobile edit sheet](docs/screenshots/edit-sheet-mobile.png).
 
-| Status | Meaning |
+## Architecture
+
+```text
+React (Vite) ── /api proxy ──▶ Controller (HTTP, DTOs, If-Match)
+                                  │
+                               Service (transactions, orchestration)
+                                  │
+                               Task (domain: lifecycle + invariants)
+                                  │
+                               Repository (JPA) ──▶ PostgreSQL (Flyway-owned schema)
+
+Beside the task flow:  agenda/  (query + ordering)   recommendation/  (eligibility → ranking)
+                       scheduling/  (activation worker, one transaction per task)
+```
+
+**Who decides what.** The backend is the source of truth for every business rule; the frontend
+presents results and handles input.
+
+| Backend | Frontend |
 |---|---|
-| `SCHEDULED` | Exists but is not actionable until its `scheduledFor` date arrives |
-| `ACTIVE` | Open and actionable now |
-| `COMPLETED` | Done; can be explicitly reopened |
+| Lifecycle transitions and their validation | Shows only actions that make sense for a status (server still validates) |
+| Agenda membership and order | Renders the Agenda exactly in the returned order |
+| Recommendation eligibility and ranking | Featured card + alternatives in the returned order; never re-sorts |
+| `isOverdue`, "today", activation | Displays them; reads the app timezone from `GET /app-info` |
+| Optimistic locking, `If-Match` (412/409) | Minimal PATCH diff, conflict review and rebase |
+| Durations stored as positive integer minutes | Minutes/hours input and exact conversion |
+| — | Session-aware completion prompt; grouping of completed tasks by date |
 
-- **`scheduledFor`** (timestamp): when the task should return to attention. V1 uses only its
-  *local date*: a task scheduled for today is `ACTIVE` immediately, even if the time is later today.
-- **`deadline`** (date): when it should be done. It never affects actionability.
-- **Agenda** (`/agenda/today`): unfinished tasks whose `scheduledFor` local date is today or
-  earlier, or whose `deadline` is today or earlier. Past days roll over until handled. A plain
-  `ACTIVE` task with no schedule or deadline does not appear. Ordered most time-critical first:
-  missed deadlines, missed schedules, due today, due within 3 days, then by scheduled time
-  (dates only — no importance or scoring; see `docs/V1-DESIGN.md` §30).
-- **Recommendations** (`/recommendations`): `ACTIVE` tasks only, optionally limited to those you
-  can make progress on within `availableMinutes` — the task's minimum session if it has one,
-  otherwise its total estimate, must fit (unknown → excluded) — ranked by a deterministic score
-  (`importance × 10` + bounded deadline-urgency points + age capped at 5) with a fixed
-  tie-breaker chain. The formula is documented in `docs/V1-DESIGN.md` §31; scores are not exposed.
-- **Durations:** `estimatedDurationMinutes` is the total time to finish a task;
-  `minSessionMinutes` (optional) is the shortest useful sitting for work spread over several
-  sessions, e.g. a 600-minute book read 10 minutes at a time. The minimum session only affects
-  the `availableMinutes` filter, never the ranking score. Time tracking (logging sessions or
-  progress) is intentionally deferred to V2.
-- **Scheduled activation:** every 5 minutes (configurable) a worker moves `SCHEDULED` tasks whose
-  `scheduledFor` local date is today or earlier to `ACTIVE`. Because the rule is `<= today`, a
-  missed run or downtime is caught up by the next run. Each task is activated in its own
-  transaction; a concurrent modification skips only that task until the next run.
+**Stack.** Java 21 · Spring Boot 4.1 · Spring Data JPA / Hibernate · PostgreSQL 16 · Flyway ·
+JUnit 5 · Mockito · Testcontainers — React 19 · TypeScript · Vite · Tailwind CSS · shadcn/ui
+(Radix) · TanStack Query · React Router · Vitest · Testing Library.
+
+## Engineering highlights
+
+- **Rich domain model.** `Task` owns `complete`, `reopen`, `schedule`, `activate` and its
+  invariants; `status` can't be set directly anywhere. The database repeats key invariants as
+  `CHECK` constraints.
+- **Concurrency.** JPA `@Version` everywhere; `PATCH` honours `If-Match` (412 before anything is
+  applied), and a commit-time race is a 409. The activation worker isolates conflicts per task.
+- **Structured errors.** RFC 9457 Problem Details with stable codes (`VALIDATION_FAILED`,
+  `TASK_NOT_FOUND`, `INVALID_STATE_TRANSITION`, `VERSION_CONFLICT`, …); clients branch on codes,
+  never on messages.
+- **Time.** An injected `Clock` and one configured zone drive "today", overdue, activation and
+  Agenda queries; the UI uses the same zone, with DST-tested conversions.
+- **Eligibility vs. ranking.** Recommendations filter first (actionable, fits the time) and rank
+  second; the minimum session only affects the filter, never the score.
+- **Server state in the UI.** TanStack Query with one invalidation root, server-confirmed
+  mutations (no optimistic guesses about derived views), 60 s polling while visible, refetch on
+  focus, and a refresh at midnight in the app zone.
+
+A longer list of talking points is in [`docs/INTERVIEW-NOTES.md`](docs/INTERVIEW-NOTES.md); the
+full design (domain, API, ordering, error contract, frontend conventions) is in
+[`docs/V1-DESIGN.md`](docs/V1-DESIGN.md).
+
+## Running locally
+
+**Prerequisites:** Java 21, Docker, Node.js 22+.
+
+```bash
+# 1. PostgreSQL
+docker run -d --name taskpilot-postgres \
+  -e POSTGRES_DB=taskpilot -e POSTGRES_USER=taskpilot -e POSTGRES_PASSWORD=taskpilot \
+  -p 5432:5432 postgres:16
+
+# 2. Backend on :8080 (Flyway applies migrations on startup)
+./mvnw spring-boot:run
+
+# 3. Frontend on :5173 (proxies /api/* to the backend)
+cd frontend && npm install && npm run dev
+```
+
+Open <http://localhost:5173>. Configuration is by environment variable (defaults in
+`application.yml`):
+
+| Variable | Default |
+|---|---|
+| `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | `jdbc:postgresql://localhost:5432/taskpilot` / `taskpilot` / `taskpilot` |
+| `APP_ZONE_ID` | `Asia/Jerusalem` |
+| `APP_ACTIVATION_ENABLED` / `APP_ACTIVATION_FIXED_DELAY` | `true` / `PT5M` |
+| `TASKPILOT_API_URL` (frontend dev proxy target) | `http://localhost:8080` |
+
+To experiment without touching your data, use a second database:
+`docker exec taskpilot-postgres createdb -U taskpilot taskpilot_dev` and start the backend with
+`DB_URL=jdbc:postgresql://localhost:5432/taskpilot_dev`.
 
 ## API
 
@@ -73,124 +133,51 @@ JUnit 5 · AssertJ · Mockito · Testcontainers
 |---|---|---|
 | `POST /tasks` | Create (status is derived, never sent) | `201` |
 | `GET /tasks/{id}` | Read one | `200` |
-| `GET /tasks[?status=ACTIVE\|SCHEDULED\|COMPLETED]` | List, optionally filtered; newest first (`COMPLETED`: most recently completed first) | `200` |
-| `PATCH /tasks/{id}` | Partial update of `title`, `description`, `importance`, `estimatedDurationMinutes`, `minSessionMinutes`, `deadline` | `200` |
+| `GET /tasks[?status=ACTIVE\|SCHEDULED\|COMPLETED]` | List; newest first (`COMPLETED`: most recently completed first) | `200` |
+| `PATCH /tasks/{id}` | Partial update of `title`, `description`, `importance`, `estimatedDurationMinutes`, `minSessionMinutes`, `deadline`; optional `If-Match` | `200` |
 | `DELETE /tasks/{id}` | Hard delete | `204` |
-| `POST /tasks/{id}/complete` | `ACTIVE`/`SCHEDULED` → `COMPLETED` | `200` |
-| `POST /tasks/{id}/reopen` | `COMPLETED` → `ACTIVE` | `200` |
-| `POST /tasks/{id}/schedule` | Schedule/reschedule (`{"scheduledFor": ...}`); today → `ACTIVE`, future → `SCHEDULED` | `200` |
-| `GET /agenda/today` | Today's Agenda | `200` |
+| `POST /tasks/{id}/complete` · `/reopen` · `/schedule` | Lifecycle commands | `200` |
+| `GET /agenda/today` | Today's Agenda, most time-critical first | `200` |
 | `GET /recommendations[?availableMinutes=N]` | Ranked actionable tasks | `200` |
-| `GET /app-info` | Configured application timezone (`{"zoneId": ...}`) for clients | `200` |
+| `GET /app-info` | Application timezone for clients | `200` |
 
-PATCH distinguishes an absent field (unchanged) from an explicit `null` (cleared, for nullable
-fields) and rejects unknown or lifecycle fields with `400`.
-
-## Architecture
-
-```text
-Controller (HTTP, DTOs) → Service (transactions, orchestration) → Task (domain rules) → Repository → PostgreSQL
-```
-
-Separate use cases sit beside the task CRUD/lifecycle flow:
-
-- `agenda/` — `AgendaController → AgendaService → TaskRepository` (one query, read-only)
-- `recommendation/` — `RecommendationService`: actionability → duration eligibility → `RecommendationRanker`
-- `scheduling/` — `ScheduledTaskActivator` → `TaskService.activateIfDue` (one transaction per task) → `Task.activate`
-
-## Running Locally
-
-**Prerequisites:** Java 21 and Docker. Maven is provided by the wrapper (`./mvnw`).
-
-1. Start PostgreSQL with the app's default connection settings:
-   ```bash
-   docker run -d --name taskpilot-postgres \
-     -e POSTGRES_DB=taskpilot -e POSTGRES_USER=taskpilot -e POSTGRES_PASSWORD=taskpilot \
-     -p 5432:5432 postgres:16
-   ```
-2. Run the application (Flyway applies migrations on startup):
-   ```bash
-   ./mvnw spring-boot:run
-   ```
-3. Try it:
-   ```bash
-   curl -X POST localhost:8080/tasks -H 'Content-Type: application/json' \
-     -d '{"title": "Homework", "importance": 4, "estimatedDurationMinutes": 90, "deadline": "2026-12-01"}'
-   curl localhost:8080/agenda/today
-   curl 'localhost:8080/recommendations?availableMinutes=30'
-   ```
-
-Configuration (environment variables, defaults in `application.yml`):
-
-| Variable | Default |
-|---|---|
-| `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | `jdbc:postgresql://localhost:5432/taskpilot` / `taskpilot` / `taskpilot` |
-| `APP_ZONE_ID` | `Asia/Jerusalem` |
-| `APP_ACTIVATION_ENABLED` | `true` |
-| `APP_ACTIVATION_FIXED_DELAY` | `PT5M` |
-
-## Frontend
-
-A React + TypeScript app in [`frontend/`](frontend), built separately from the backend
-(Vite, Tailwind CSS, shadcn/ui, TanStack Query, React Router): **Today** (Agenda + Focus
-recommendations with an available-time filter) and **Tasks** (status filters), with quick
-create, an edit sheet, complete / reopen / schedule / delete from each row.
-
-Mutations are server-confirmed (no optimistic UI) and refresh every task view afterwards.
-Edits send a minimal PATCH with `If-Match`; if the task changed elsewhere, the draft is kept and
-the user can review the differences, discard, or save only their own changes over the latest
-version.
-
-**Prerequisites:** Node.js 22+ and the backend running on `localhost:8080`.
-
-```bash
-cd frontend
-npm install
-npm run dev        # http://localhost:5173
-```
-
-The dev server proxies `/api/*` to Spring Boot with the prefix stripped, so the backend needs no
-CORS configuration (`TASKPILOT_API_URL` overrides the target). The UI reads the application
-timezone from `GET /app-info` and uses it for every date it shows or builds.
-
-```bash
-npm test           # Vitest: PATCH diff + conflict rebase, time/DST, errors, URL state, components
-npm run typecheck
-npm run build
-```
-
-To try the UI without touching your normal data, point the backend at a separate database:
-
-```bash
-docker exec taskpilot-postgres createdb -U taskpilot taskpilot_dev
-DB_URL=jdbc:postgresql://localhost:5432/taskpilot_dev ./mvnw spring-boot:run
-```
+`PATCH` distinguishes an omitted field (unchanged) from an explicit `null` (cleared) and rejects
+unknown or lifecycle fields.
 
 ## Testing
 
 ```bash
-./mvnw test
+./mvnw clean test          # 208 tests; Docker required (Testcontainers PostgreSQL 16)
+cd frontend
+npm test                   # 125 tests (Vitest + Testing Library)
+npm run typecheck && npx eslint . && npm run build
 ```
 
-Docker must be running: persistence, API, and worker tests use a real PostgreSQL 16 container via
-Testcontainers. The scheduled trigger is disabled in tests; worker tests invoke it directly with a
-fixed `Clock`.
+Business rules are tested at the lowest layer that owns them: domain unit tests for lifecycle and
+invariants, ranker and Agenda-ordering unit tests, PostgreSQL integration tests (mapping,
+constraints, optimistic locking, timezone boundaries), API tests through MockMvc against real
+PostgreSQL, and worker tests with a fixed clock. Frontend tests cover the PATCH diff and conflict
+rebase, DST-aware time helpers, duration parsing, error handling, completed-task grouping, and
+the main interactions.
 
-- **Domain unit tests** — lifecycle transitions, invariants, local-date rules (no Spring, no DB)
-- **Service tests** — orchestration only (lookups, presence-aware PATCH, eligibility, Clock usage)
-- **Ranker unit tests** — every score band, cap, and tie-breaker; input-order independence
-- **PostgreSQL integration tests** — mapping, `CHECK` constraints, optimistic locking, Agenda and
-  activation queries including timezone boundaries
-- **API integration tests** — `HTTP → Controller → Service → Repository → PostgreSQL` via MockMvc,
-  verifying committed state
-- **Worker tests** — due/future/overdue activation, downtime recovery, and deterministic
-  isolation of an optimistic-lock conflict
+## Design decisions and trade-offs
 
-## Not in V1 / Roadmap
+- **Server-confirmed UI, broad invalidation.** Simpler and always correct; costs a few extra GETs.
+- **Agenda sorted in Java, not SQL**, to reuse the domain's overdue rules; database pagination of
+  the Agenda would require moving the rule into the query.
+- **412 vs 409** for version conflicts: precondition failed before applying vs. lost a race at
+  commit; same `VERSION_CONFLICT` code. A version check can flag unrelated changes (e.g. the
+  worker activating the task); the review UI makes those one click to resolve.
+- **Session-aware completion is a UX convention**, not a backend task type: "I'm done for now"
+  records nothing, because V1 has no time tracking.
+- **Presentation logic stays in the frontend** (date grouping, minutes/hours), business rules stay
+  in the backend, and the API carries only minutes and instants.
 
-Intentionally out of scope for V1 and **not implemented**: authentication / multi-user, time
-tracking (session logging / progress — planned for V2),
-recurring tasks, dependencies, automatic schedule generation, calendar integration, persistent
-history/analytics, and any AI features. Future phases are described at the end of
-`docs/V1-DESIGN.md`; optional AI capabilities (natural-language task capture, a tool-calling
-assistant) are planned in `docs/AI-ROADMAP.md` for after the core backend is stable.
+## V2 ideas
+
+- **Time tracking and session history** — log sessions, time spent and progress per task, so
+  "I'm done for now" can record what was done and recommendations can consider remaining work.
+- Recurring tasks, task dependencies, and a schedule generator for today/tomorrow.
+- Calendar view and integration; natural-language capture and a tool-calling assistant
+  (see [`docs/AI-ROADMAP.md`](docs/AI-ROADMAP.md)).
+- Authentication and multi-user support; deployment (static frontend + reverse proxy).

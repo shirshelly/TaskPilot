@@ -1917,7 +1917,69 @@ Do not chase arbitrary 100% coverage.
 
 ---
 
+## 48. Frontend (V1)
+
+A React + TypeScript app in `frontend/` (Vite, TanStack Query, React Router, Tailwind,
+shadcn/ui). It is a presentation layer: every business rule above stays in the backend.
+
+### Responsibility boundary
+
+```text
+backend   lifecycle rules, Agenda membership + order, recommendation eligibility + ranking,
+          isOverdue, "today", activation, validation, optimistic locking
+frontend  rendering in the returned order, input handling, minimal PATCH diffs,
+          conflict review, presentation-only grouping and unit conversion
+```
+
+The UI never re-sorts Agenda or Recommendations, never computes overdue, and never filters by
+duration. It hides actions that would certainly be rejected (e.g. Schedule on a completed task),
+but the server still validates every request.
+
+### Data flow
+
+- `GET /app-info` is read once; every date shown or built uses that zone, never the browser's.
+- Mutations are server-confirmed (no optimistic updates) and then invalidate every task view.
+- Views on screen refetch every 60 s while the tab is visible, on focus, and when the date rolls
+  over in the application zone.
+
+### Editing and conflicts
+
+The edit sheet keeps the version it started from. Saving sends only changed fields
+(`null` for cleared ones) with `If-Match`. On `VERSION_CONFLICT` (412 or 409) the draft is kept;
+the user can review differences, discard their changes, or save their own changes over the
+latest version — the edit is rebased so fields changed only on the server are never reverted,
+and fields changed on both sides require confirmation. Nothing is retried or merged
+automatically.
+
+### UX conventions (frontend only, no backend concept)
+
+- **Start on without a time** is sent as the first instant of that day in the application zone
+  and displayed without a time. Activation only looks at the date (§9).
+- **Durations** can be typed in minutes or hours (decimals allowed). Hours convert to whole
+  minutes exactly; inputs that aren't whole minutes are rejected, never rounded. The API and
+  database only ever carry positive integer minutes. Changing only the display unit is not a
+  change. A minimum session longer than the total shows a non-blocking warning.
+- **Session-aware completion.** A task with `minSessionMinutes` is treated as worked on in
+  sittings: every completion control asks *"What did you finish?"*. "I'm done for now" sends no
+  request and records nothing (there is no time tracking in V1); "I finished the entire task"
+  calls `POST /tasks/{id}/complete`. This is a UX signal derived from an existing field, not a
+  task type or status.
+- **Completed tasks** are grouped by completion date in the application zone: Today, Yesterday,
+  Earlier this week, then calendar months. Weeks start on Monday (ISO 8601). Checks run in that
+  order, so each task belongs to exactly one group; empty groups are hidden. The backend list
+  and its order are unchanged — there is no backend grouping or pagination in V1.
+
+---
+
 # Future Roadmap
+
+## Time Tracking and Session History (V2 candidate)
+
+V1 records only the minimum session length (§13); "I'm done for now" is deliberately not
+persisted. A natural next step is a session log (start/end or duration per task) with a
+dedicated table and migration, which would let the UI record finished sessions, show progress
+and time spent, and let recommendations consider remaining work. It needs its own design pass:
+history is persistent business data (§15), not something to derive from logs.
 
 ## Phase 2 — Recurring Tasks
 
