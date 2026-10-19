@@ -73,7 +73,8 @@ describe('task row actions', () => {
   })
 
   it('offers Reopen (not Schedule) for a completed task', async () => {
-    const done = task({ title: 'Taxes', status: 'COMPLETED', completedAt: '2026-10-20T09:00:00Z' })
+    // Completed "now", so it lands in the expanded Today group.
+    const done = task({ title: 'Taxes', status: 'COMPLETED', completedAt: new Date().toISOString() })
     stubFetch(() => json([done]))
     renderWithApp(<TasksPage />, { route: '/tasks?status=completed' })
 

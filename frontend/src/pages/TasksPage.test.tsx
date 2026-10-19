@@ -11,7 +11,7 @@ describe('TasksPage', () => {
     const fetchMock = stubFetch((url) =>
       json(
         url.searchParams.get('status') === 'COMPLETED'
-          ? [task({ title: 'Filed taxes', status: 'COMPLETED', completedAt: '2026-10-01T10:00:00Z' })]
+          ? [task({ title: 'Filed taxes', status: 'COMPLETED', completedAt: new Date().toISOString() })]
           : [task({ title: 'Water plants' })],
       ),
     )

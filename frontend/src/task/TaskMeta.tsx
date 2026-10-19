@@ -47,8 +47,7 @@ export function TaskMeta({ task, showStatus = false, className }: { task: Task; 
       <Item key="duration" icon={<Clock3 />}>
         {task.estimatedDurationMinutes !== null && (
           <>
-            <span className="sr-only">Estimated duration: </span>
-            {formatDuration(task.estimatedDurationMinutes)}
+            <span className="sr-only">Estimated duration:</span> {formatDuration(task.estimatedDurationMinutes)}
           </>
         )}
         {task.estimatedDurationMinutes !== null && task.minSessionMinutes !== null && ' · '}
@@ -73,7 +72,8 @@ function Item({ icon, title, children }: { icon: ReactNode; title?: string; chil
   return (
     <span className="inline-flex items-center gap-1.5 [&_svg]:size-3.5 [&_svg]:shrink-0" title={title}>
       <span aria-hidden="true" className="inline-flex">{icon}</span>
-      {title && <span className="sr-only">{title}: </span>}
+      {title && <span className="sr-only">{title}:</span>}
+      {title && ' '}
       {children}
     </span>
   )

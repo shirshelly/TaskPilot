@@ -15,6 +15,7 @@ import {
   type TaskFilter,
 } from '@/lib/taskFilter'
 import { useTasks } from '@/queries/queries'
+import { CompletedGroups } from '@/task/CompletedGroups'
 import { TaskRow } from '@/task/TaskRow'
 
 const EMPTY_COPY: Record<TaskFilter, { title: string; description: string }> = {
@@ -96,6 +97,8 @@ export function TasksPage() {
               )
             }
           />
+        ) : filter === 'completed' ? (
+          <CompletedGroups tasks={query.data} />
         ) : (
           <ul className="divide-y divide-border/70 border-y border-border/70">
             {query.data.map((task) => (
