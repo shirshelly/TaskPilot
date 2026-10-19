@@ -126,6 +126,17 @@ class RecommendationRankerTest {
     }
 
     @Test
+    void minimumSessionNeitherScoresNorBreaksTiesTheTotalEstimateDoes() {
+        // Shorter session but longer total vs. longer session but shorter total: the total decides.
+        Task longTotalShortSessions = withMinSession(task(3, null, 600, 0), 10);
+        Task shortTotalLongSessions = withMinSession(task(3, null, 60, 0), 45);
+
+        assertThat(ranker.score(longTotalShortSessions, TODAY)).isEqualTo(ranker.score(shortTotalLongSessions, TODAY));
+        assertThat(ranker.rank(List.of(longTotalShortSessions, shortTotalLongSessions)))
+                .containsExactly(shortTotalLongSessions, longTotalShortSessions);
+    }
+
+    @Test
     void thenByOlderCreatedAt() {
         // Both are past the age cap, so they score the same; only createdAt separates them.
         Task tenDaysOld = task(3, null, null, 10);
@@ -166,6 +177,11 @@ class RecommendationRankerTest {
 
     private static Task task(int importance, LocalDate deadline, Integer durationMinutes, int ageDays) {
         return named("Task", importance, deadline, durationMinutes, ageDays);
+    }
+
+    private static Task withMinSession(Task task, int minSessionMinutes) {
+        task.updateMinSessionMinutes(minSessionMinutes, CLOCK);
+        return task;
     }
 
     private static Task named(String title, int importance, LocalDate deadline, Integer durationMinutes, int ageDays) {

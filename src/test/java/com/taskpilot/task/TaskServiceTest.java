@@ -42,7 +42,7 @@ class TaskServiceTest {
     @Test
     void createsAndSavesATaskUsingTheInjectedClock() {
         TaskService taskService = new TaskService(taskRepository, CLOCK);
-        CreateTaskRequest request = new CreateTaskRequest("Buy plant", null, null, null, null, null);
+        CreateTaskRequest request = new CreateTaskRequest("Buy plant", null, null, null, null, null, null);
         when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Task result = taskService.create(request);
@@ -59,10 +59,22 @@ class TaskServiceTest {
     }
 
     @Test
+    void createPassesTheMinimumSessionThrough() {
+        TaskService taskService = new TaskService(taskRepository, CLOCK);
+        CreateTaskRequest request = new CreateTaskRequest("Read a book", null, null, 600, 10, null, null);
+        when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Task result = taskService.create(request);
+
+        assertThat(result.getEstimatedDurationMinutes()).isEqualTo(600);
+        assertThat(result.getMinSessionMinutes()).isEqualTo(10);
+    }
+
+    @Test
     void derivesScheduledStatusForAFutureScheduledForUsingTheInjectedClock() {
         TaskService taskService = new TaskService(taskRepository, CLOCK);
         OffsetDateTime future = TODAY.plusDays(2).atTime(9, 0).atOffset(ZoneOffset.UTC);
-        CreateTaskRequest request = new CreateTaskRequest("Dentist", null, null, null, null, future);
+        CreateTaskRequest request = new CreateTaskRequest("Dentist", null, null, null, null, null, future);
         when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Task result = taskService.create(request);
@@ -192,6 +204,28 @@ class TaskServiceTest {
         assertThat(result.getImportance()).isEqualTo(2);
         assertThat(result.getEstimatedDurationMinutes()).isEqualTo(30);
         assertThat(result.getUpdatedAt()).isEqualTo(CLOCK.instant());
+    }
+
+    @Test
+    void updateTreatsMinimumSessionAsPresenceAware() {
+        Task task = Task.create("Read a book", null, null, 600, 10, null, null, CLOCK);
+        TaskService taskService = new TaskService(taskRepository, CLOCK);
+        when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
+
+        UpdateTaskRequest omitted = new UpdateTaskRequest();
+        omitted.setTitle("Read two books");
+        taskService.update(task.getId(), omitted, null);
+        assertThat(task.getMinSessionMinutes()).isEqualTo(10);
+
+        UpdateTaskRequest changed = new UpdateTaskRequest();
+        changed.setMinSessionMinutes(25);
+        taskService.update(task.getId(), changed, null);
+        assertThat(task.getMinSessionMinutes()).isEqualTo(25);
+
+        UpdateTaskRequest cleared = new UpdateTaskRequest();
+        cleared.setMinSessionMinutes(null);
+        taskService.update(task.getId(), cleared, null);
+        assertThat(task.getMinSessionMinutes()).isNull();
     }
 
     @Test

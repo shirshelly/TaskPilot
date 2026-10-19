@@ -33,6 +33,7 @@ public class TaskService {
                 request.description(),
                 request.importance(),
                 request.estimatedDurationMinutes(),
+                request.minSessionMinutes(),
                 request.deadline(),
                 request.scheduledFor(),
                 clock);
@@ -85,6 +86,9 @@ public class TaskService {
         }
         if (request.hasEstimatedDurationMinutes()) {
             task.updateEstimatedDurationMinutes(request.estimatedDurationMinutes(), clock);
+        }
+        if (request.hasMinSessionMinutes()) {
+            task.updateMinSessionMinutes(request.minSessionMinutes(), clock);
         }
         if (request.hasDeadline()) {
             task.updateDeadline(request.deadline(), clock);

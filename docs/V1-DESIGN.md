@@ -142,11 +142,14 @@ The system should support:
 GET /recommendations?availableMinutes=20
 ```
 
-When a strict `availableMinutes` value is supplied:
-- tasks whose estimated duration exceeds the limit are excluded
-- tasks with unknown estimated duration are excluded in V1
+When a strict `availableMinutes` value is supplied, the question is "what can I make progress on
+in this time?", not only "what can I finish?":
+- the time a task needs is its minimum session (`minSessionMinutes`, §13) if set, otherwise its
+  total estimate (`estimatedDurationMinutes`)
+- tasks needing more than the limit are excluded
+- tasks with neither value are excluded in V1 (the time they need is unknown)
 
-Without `availableMinutes`, tasks with unknown duration may still participate.
+Without `availableMinutes`, every actionable task participates, including unknown durations.
 
 The recommendation algorithm should be deterministic in V1.
 
@@ -167,6 +170,7 @@ description
 status
 importance
 estimatedDurationMinutes
+minSessionMinutes
 deadline
 scheduledFor
 createdAt
@@ -378,6 +382,14 @@ If `estimatedDurationMinutes` exists:
 estimatedDurationMinutes > 0
 ```
 
+If `minSessionMinutes` exists:
+
+```text
+minSessionMinutes > 0
+```
+
+The two are independent: no rule relates the minimum session to the total estimate.
+
 A deadline may be in the past.
 
 Scheduling a task to a date after its deadline is allowed by the backend.
@@ -573,14 +585,32 @@ Backend project  → 1200
 
 It may be null when the user does not know.
 
-V1 does not include:
+### Minimum session
 
-- task splitting
-- work sessions
-- preferred session duration
-- splittable flag
+`minSessionMinutes` is the shortest useful amount of time the user can spend making progress on
+a task that is worked on over several sittings. It is optional and independent of the total:
 
-Large tasks may remain ACTIVE over multiple real-world work sessions.
+```text
+Task               estimatedDurationMinutes   minSessionMinutes
+Read a book        600                        10
+Work on TaskPilot  1200                       15
+Clean the oven     45                         null
+Call dentist       10                         null
+```
+
+It only affects the `availableMinutes` eligibility check (§3.2, §31): a long task can be
+recommended for a short slot if a session fits. It never contributes to the score and is not a
+tie-breaker; ranking still uses the total estimate (§31).
+
+Large tasks remain ACTIVE over multiple real-world work sessions and are completed explicitly.
+A session does not complete or otherwise change a task.
+
+V1 still does not include:
+
+- time tracking: logging sessions, time spent, progress, or remaining time
+  (intentionally deferred to V2)
+- task splitting or a splittable flag
+- a separate task type for ongoing work
 
 ---
 
@@ -660,6 +690,7 @@ description                 TEXT NULL
 status                      VARCHAR(...) NOT NULL
 importance                  SMALLINT NOT NULL DEFAULT 3
 estimated_duration_minutes  INTEGER NULL
+min_session_minutes         INTEGER NULL      (V2 migration)
 
 deadline                    DATE NULL
 scheduled_for               TIMESTAMPTZ NULL
@@ -698,6 +729,15 @@ Estimated duration:
 CHECK (
   estimated_duration_minutes IS NULL
   OR estimated_duration_minutes > 0
+)
+```
+
+Minimum session (added by `V2__add_min_session_minutes.sql`; existing rows stay `NULL`):
+
+```text
+CHECK (
+  min_session_minutes IS NULL
+  OR min_session_minutes > 0
 )
 ```
 
@@ -894,6 +934,7 @@ title
 description?
 importance?
 estimatedDurationMinutes?
+minSessionMinutes?
 deadline?
 scheduledFor?
 ```
@@ -926,6 +967,7 @@ title
 description
 importance
 estimatedDurationMinutes
+minSessionMinutes
 deadline
 ```
 
@@ -941,7 +983,8 @@ scheduledFor
 
 ### Partial update semantics for nullable fields
 
-`description`, `estimatedDurationMinutes`, and `deadline` are nullable and clearable.
+`description`, `estimatedDurationMinutes`, `minSessionMinutes`, and `deadline` are nullable and
+clearable.
 
 Plain JSON→POJO binding cannot distinguish "field omitted" (leave unchanged) from "field
 explicitly set to `null`" (clear it). The request DTO must be presence-aware for each field:
@@ -1212,7 +1255,8 @@ Do not allow the ranker to redefine actionability.
 actionable(task) = status == ACTIVE
 
 no availableMinutes   → every actionable task is eligible (unknown duration included)
-availableMinutes = N  → estimatedDurationMinutes != null AND estimatedDurationMinutes <= N
+availableMinutes = N  → required != null AND required <= N
+                        where required = minSessionMinutes ?? estimatedDurationMinutes
 ```
 
 `availableMinutes` must be a positive integer (`0`, negative, or non-numeric → `400`). No upper bound.
@@ -1238,7 +1282,8 @@ ageDays   = DAYS.between(createdAt as local date in the configured zone, today)
 agePoints = min(max(ageDays, 0), 5)                     (small anti-starvation nudge)
 ```
 
-`estimatedDurationMinutes` contributes no points; it only affects eligibility and tie-breaking.
+`estimatedDurationMinutes` contributes no points; it only affects eligibility (as the fallback
+when there is no minimum session) and tie-breaking. `minSessionMinutes` affects eligibility only.
 `scheduledFor` does not participate in ranking.
 
 ### Ordering (part of the API contract)
@@ -1269,6 +1314,7 @@ description
 status
 importance
 estimatedDurationMinutes
+minSessionMinutes
 deadline
 scheduledFor
 createdAt
@@ -1827,6 +1873,15 @@ Eligible:
 
 ```text
 Task A only
+```
+
+With minimum sessions (`availableMinutes = 15`):
+
+```text
+Read a book    total 600, min session 10   → eligible (a session fits)
+Deep work      total 600, min session 20   → not eligible
+Call dentist   total 10,  no min session   → eligible (falls back to the total)
+Unknown        neither                     → not eligible
 ```
 
 Ranking tests should verify deterministic ordering for exact inputs.

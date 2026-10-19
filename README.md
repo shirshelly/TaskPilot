@@ -52,10 +52,16 @@ JUnit 5 · AssertJ · Mockito · Testcontainers
   `ACTIVE` task with no schedule or deadline does not appear. Ordered most time-critical first:
   missed deadlines, missed schedules, due today, due within 3 days, then by scheduled time
   (dates only — no importance or scoring; see `docs/V1-DESIGN.md` §30).
-- **Recommendations** (`/recommendations`): `ACTIVE` tasks only, optionally limited to those with
-  a known duration ≤ `availableMinutes`, ranked by a deterministic score
+- **Recommendations** (`/recommendations`): `ACTIVE` tasks only, optionally limited to those you
+  can make progress on within `availableMinutes` — the task's minimum session if it has one,
+  otherwise its total estimate, must fit (unknown → excluded) — ranked by a deterministic score
   (`importance × 10` + bounded deadline-urgency points + age capped at 5) with a fixed
   tie-breaker chain. The formula is documented in `docs/V1-DESIGN.md` §31; scores are not exposed.
+- **Durations:** `estimatedDurationMinutes` is the total time to finish a task;
+  `minSessionMinutes` (optional) is the shortest useful sitting for work spread over several
+  sessions, e.g. a 600-minute book read 10 minutes at a time. The minimum session only affects
+  the `availableMinutes` filter, never the ranking score. Time tracking (logging sessions or
+  progress) is intentionally deferred to V2.
 - **Scheduled activation:** every 5 minutes (configurable) a worker moves `SCHEDULED` tasks whose
   `scheduledFor` local date is today or earlier to `ACTIVE`. Because the rule is `<= today`, a
   missed run or downtime is caught up by the next run. Each task is activated in its own
@@ -68,7 +74,7 @@ JUnit 5 · AssertJ · Mockito · Testcontainers
 | `POST /tasks` | Create (status is derived, never sent) | `201` |
 | `GET /tasks/{id}` | Read one | `200` |
 | `GET /tasks[?status=ACTIVE\|SCHEDULED\|COMPLETED]` | List, optionally filtered; newest first (`COMPLETED`: most recently completed first) | `200` |
-| `PATCH /tasks/{id}` | Partial update of `title`, `description`, `importance`, `estimatedDurationMinutes`, `deadline` | `200` |
+| `PATCH /tasks/{id}` | Partial update of `title`, `description`, `importance`, `estimatedDurationMinutes`, `minSessionMinutes`, `deadline` | `200` |
 | `DELETE /tasks/{id}` | Hard delete | `204` |
 | `POST /tasks/{id}/complete` | `ACTIVE`/`SCHEDULED` → `COMPLETED` | `200` |
 | `POST /tasks/{id}/reopen` | `COMPLETED` → `ACTIVE` | `200` |
@@ -182,7 +188,8 @@ fixed `Clock`.
 
 ## Not in V1 / Roadmap
 
-Intentionally out of scope for V1 and **not implemented**: authentication / multi-user,
+Intentionally out of scope for V1 and **not implemented**: authentication / multi-user, time
+tracking (session logging / progress — planned for V2),
 recurring tasks, dependencies, automatic schedule generation, calendar integration, persistent
 history/analytics, and any AI features. Future phases are described at the end of
 `docs/V1-DESIGN.md`; optional AI capabilities (natural-language task capture, a tool-calling

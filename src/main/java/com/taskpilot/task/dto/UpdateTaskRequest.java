@@ -13,7 +13,7 @@ import java.time.LocalDate;
  * creator parameter to the same value as an explicit null. Lifecycle fields (status,
  * scheduledFor, completedAt) are intentionally absent from this type and rejected as unknown.
  *
- * Value rules (blank title, importance range, positive duration) are not repeated here; the
+ * Value rules (blank title, importance range, positive durations) are not repeated here; the
  * Task update methods own them.
  */
 public class UpdateTaskRequest {
@@ -29,6 +29,9 @@ public class UpdateTaskRequest {
 
     private Integer estimatedDurationMinutes;
     private boolean estimatedDurationMinutesPresent;
+
+    private Integer minSessionMinutes;
+    private boolean minSessionMinutesPresent;
 
     private LocalDate deadline;
     private boolean deadlinePresent;
@@ -51,6 +54,11 @@ public class UpdateTaskRequest {
     public void setEstimatedDurationMinutes(Integer estimatedDurationMinutes) {
         this.estimatedDurationMinutes = estimatedDurationMinutes;
         this.estimatedDurationMinutesPresent = true;
+    }
+
+    public void setMinSessionMinutes(Integer minSessionMinutes) {
+        this.minSessionMinutes = minSessionMinutes;
+        this.minSessionMinutesPresent = true;
     }
 
     public void setDeadline(LocalDate deadline) {
@@ -101,6 +109,14 @@ public class UpdateTaskRequest {
 
     public Integer estimatedDurationMinutes() {
         return estimatedDurationMinutes;
+    }
+
+    public boolean hasMinSessionMinutes() {
+        return minSessionMinutesPresent;
+    }
+
+    public Integer minSessionMinutes() {
+        return minSessionMinutes;
     }
 
     public boolean hasDeadline() {

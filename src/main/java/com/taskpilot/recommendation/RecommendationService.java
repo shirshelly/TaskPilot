@@ -32,12 +32,21 @@ public class RecommendationService {
         return ranker.rank(eligible);
     }
 
-    /** Without a time limit everything fits; with one, unknown duration does not (§3.2). */
+    /**
+     * Without a time limit everything fits. With one, a task fits if the user can make meaningful
+     * progress in that time (§3.2): its minimum session when it has one (work spread over
+     * several sittings), otherwise its total estimate (work done in one go). With neither,
+     * the time it needs is unknown, so it does not fit.
+     */
     static boolean fitsAvailableTime(Task task, Integer availableMinutes) {
         if (availableMinutes == null) {
             return true;
         }
-        Integer duration = task.getEstimatedDurationMinutes();
-        return duration != null && duration <= availableMinutes;
+        Integer required = requiredMinutes(task);
+        return required != null && required <= availableMinutes;
+    }
+
+    static Integer requiredMinutes(Task task) {
+        return task.getMinSessionMinutes() != null ? task.getMinSessionMinutes() : task.getEstimatedDurationMinutes();
     }
 }

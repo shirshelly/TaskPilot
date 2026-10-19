@@ -47,6 +47,10 @@ public class Task {
     @Column(name = "estimated_duration_minutes")
     private Integer estimatedDurationMinutes;
 
+    // Shortest useful sitting for work spread over several sessions; null = no such notion.
+    @Column(name = "min_session_minutes")
+    private Integer minSessionMinutes;
+
     @Column(name = "deadline")
     private LocalDate deadline;
 
@@ -71,20 +75,22 @@ public class Task {
     }
 
     private Task(UUID id, String title, String description, TaskStatus status, int importance,
-                 Integer estimatedDurationMinutes, LocalDate deadline, OffsetDateTime scheduledFor,
-                 Instant createdAt, Instant updatedAt) {
+                 Integer estimatedDurationMinutes, Integer minSessionMinutes, LocalDate deadline,
+                 OffsetDateTime scheduledFor, Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.title = title;
         this.description = description;
         this.status = status;
         this.importance = importance;
         this.estimatedDurationMinutes = estimatedDurationMinutes;
+        this.minSessionMinutes = minSessionMinutes;
         this.deadline = deadline;
         this.scheduledFor = scheduledFor;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
 
+    /** Creates a task without a minimum session length. */
     public static Task create(String title,
                                String description,
                                Integer importance,
@@ -92,9 +98,21 @@ public class Task {
                                LocalDate deadline,
                                OffsetDateTime scheduledFor,
                                Clock clock) {
+        return create(title, description, importance, estimatedDurationMinutes, null, deadline, scheduledFor, clock);
+    }
+
+    public static Task create(String title,
+                               String description,
+                               Integer importance,
+                               Integer estimatedDurationMinutes,
+                               Integer minSessionMinutes,
+                               LocalDate deadline,
+                               OffsetDateTime scheduledFor,
+                               Clock clock) {
         String validatedTitle = requireNonBlankTitle(title);
         int resolvedImportance = importance == null ? DEFAULT_IMPORTANCE : requireValidImportance(importance);
         Integer validatedDuration = requireValidDuration(estimatedDurationMinutes);
+        Integer validatedMinSession = requireValidMinSession(minSessionMinutes);
 
         Instant now = clock.instant();
         // Same-day-or-past scheduledFor activates immediately; only a strictly future date defers it (§23).
@@ -103,7 +121,7 @@ public class Task {
                 : TaskStatus.ACTIVE;
 
         return new Task(UUID.randomUUID(), validatedTitle, description, initialStatus, resolvedImportance,
-                validatedDuration, deadline, scheduledFor, now, now);
+                validatedDuration, validatedMinSession, deadline, scheduledFor, now, now);
     }
 
     // --- lifecycle operations ---
@@ -216,6 +234,11 @@ public class Task {
         this.updatedAt = clock.instant();
     }
 
+    public void updateMinSessionMinutes(Integer newMinSessionMinutes, Clock clock) {
+        this.minSessionMinutes = requireValidMinSession(newMinSessionMinutes);
+        this.updatedAt = clock.instant();
+    }
+
     public void updateDeadline(LocalDate newDeadline, Clock clock) {
         this.deadline = newDeadline;
         this.updatedAt = clock.instant();
@@ -241,6 +264,14 @@ public class Task {
     private static Integer requireValidDuration(Integer candidate) {
         if (candidate != null && candidate <= 0) {
             throw new TaskValidationException("estimatedDurationMinutes must be positive");
+        }
+        return candidate;
+    }
+
+    // Independent of the total estimate: no cross-field rule, so each can be edited on its own.
+    private static Integer requireValidMinSession(Integer candidate) {
+        if (candidate != null && candidate <= 0) {
+            throw new TaskValidationException("minSessionMinutes must be positive");
         }
         return candidate;
     }
@@ -277,6 +308,10 @@ public class Task {
 
     public Integer getEstimatedDurationMinutes() {
         return estimatedDurationMinutes;
+    }
+
+    public Integer getMinSessionMinutes() {
+        return minSessionMinutes;
     }
 
     public LocalDate getDeadline() {

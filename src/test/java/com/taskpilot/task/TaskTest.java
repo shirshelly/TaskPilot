@@ -441,6 +441,62 @@ class TaskTest {
     }
 
     @Nested
+    class MinimumSession {
+
+        @Test
+        void isOptionalAndIndependentOfTheTotalEstimate() {
+            Task book = Task.create("Read a book", null, null, 600, 10, null, null, clockOnToday());
+            Task chore = Task.create("Clean the oven", null, null, 45, null, null, null, clockOnToday());
+            Task legacyFactory = Task.create("Call dentist", null, null, 10, null, null, clockOnToday());
+
+            assertThat(book.getEstimatedDurationMinutes()).isEqualTo(600);
+            assertThat(book.getMinSessionMinutes()).isEqualTo(10);
+            assertThat(chore.getMinSessionMinutes()).isNull();
+            assertThat(legacyFactory.getMinSessionMinutes()).isNull();
+        }
+
+        @Test
+        void mustBePositiveWhenPresent() {
+            assertThatThrownBy(() -> Task.create("Task", null, null, null, 0, null, null, clockOnToday()))
+                    .isInstanceOf(TaskValidationException.class);
+            assertThatThrownBy(() -> Task.create("Task", null, null, null, -5, null, null, clockOnToday()))
+                    .isInstanceOf(TaskValidationException.class);
+
+            Task task = Task.create("Task", null, null, null, 10, null, null, clockOnToday());
+            assertThatThrownBy(() -> task.updateMinSessionMinutes(0, clockOnToday()))
+                    .isInstanceOf(TaskValidationException.class);
+            assertThat(task.getMinSessionMinutes()).isEqualTo(10);
+        }
+
+        @Test
+        void canBeChangedAndClearedLikeOtherNonLifecycleFields() {
+            Task task = Task.create("Task", null, null, 600, 10, null, null, clockOnToday());
+            Clock later = Clock.offset(clockOnToday(), Duration.ofHours(1));
+
+            task.updateMinSessionMinutes(20, later);
+            assertThat(task.getMinSessionMinutes()).isEqualTo(20);
+            assertThat(task.getUpdatedAt()).isEqualTo(later.instant());
+
+            task.updateMinSessionMinutes(null, later);
+            assertThat(task.getMinSessionMinutes()).isNull();
+            assertThat(task.getStatus()).isEqualTo(TaskStatus.ACTIVE);
+        }
+
+        @Test
+        void lifecycleOperationsLeaveItUntouched() {
+            // An ongoing task is not completed by a session: it stays ACTIVE until explicitly completed.
+            Task task = Task.create("Work on TaskPilot", null, null, 1200, 15, null, null, clockOnToday());
+
+            task.schedule(at(TODAY.plusDays(2), 9), clockOnToday());
+            task.complete(clockOnToday());
+            task.reopen(clockOnToday());
+
+            assertThat(task.getMinSessionMinutes()).isEqualTo(15);
+            assertThat(task.getEstimatedDurationMinutes()).isEqualTo(1200);
+        }
+    }
+
+    @Nested
     class NonLifecycleUpdates {
 
         @Test

@@ -13,6 +13,7 @@ public record CreateTaskRequest(
         String description,
         @Min(1) @Max(5) Integer importance,
         @Positive Integer estimatedDurationMinutes,
+        @Positive Integer minSessionMinutes,
         LocalDate deadline,
         OffsetDateTime scheduledFor
 ) {

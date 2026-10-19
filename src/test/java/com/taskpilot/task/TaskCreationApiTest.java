@@ -20,10 +20,12 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -138,6 +140,47 @@ class TaskCreationApiTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void minimumSessionIsStoredAndReturnedAlongsideTheTotalEstimate() throws Exception {
+        String responseBody = mockMvc.perform(post("/tasks")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title": "Read a book", "estimatedDurationMinutes": 600, "minSessionMinutes": 10}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.estimatedDurationMinutes").value(600))
+                .andExpect(jsonPath("$.minSessionMinutes").value(10))
+                .andReturn().getResponse().getContentAsString();
+
+        UUID id = UUID.fromString(objectMapper.readTree(responseBody).get("id").asText());
+        assertThat(taskRepository.findById(id).orElseThrow().getMinSessionMinutes()).isEqualTo(10);
+    }
+
+    @Test
+    void minimumSessionIsOptionalAndReturnedAsNull() throws Exception {
+        mockMvc.perform(post("/tasks")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title": "Clean the oven", "estimatedDurationMinutes": 45}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.minSessionMinutes").value(nullValue()));
+    }
+
+    @Test
+    void nonPositiveMinimumSessionIsRejectedWith400() throws Exception {
+        for (String invalid : List.of("0", "-5")) {
+            mockMvc.perform(post("/tasks")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"title": "Task", "minSessionMinutes": %s}
+                                    """.formatted(invalid)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+        }
+        assertThat(taskRepository.count()).isZero();
     }
 
     @Test

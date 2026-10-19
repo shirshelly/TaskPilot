@@ -107,6 +107,27 @@ class RecommendationApiTest {
     }
 
     @Test
+    void availableMinutesUsesTheMinimumSessionWhenPresentAndTheTotalOtherwise() throws Exception {
+        save(withMinSession(activeTask("Read a book: 600 total, 10 per session", 3, null, 600, 0), 10));
+        save(withMinSession(activeTask("Deep work: 600 total, 20 per session", 3, null, 600, 0), 20));
+        save(activeTask("Call dentist: 10 total", 3, null, 10, 0));
+        save(activeTask("Clean oven: 45 total", 3, null, 45, 0));
+        save(activeTask("Unknown", 3, null, null, 0));
+
+        // Same score for all; the existing tie-break (shorter total first) orders the survivors.
+        assertThat(recommendations(get("/recommendations").param("availableMinutes", "15")))
+                .extracting(TaskResponse::title)
+                .containsExactly("Call dentist: 10 total", "Read a book: 600 total, 10 per session");
+
+        // Without a limit, eligibility is unchanged: every active task. (Order is the ranker's;
+        // the two 600-minute tasks tie down to the id, so only membership is asserted here.)
+        assertThat(recommendations(get("/recommendations")))
+                .extracting(TaskResponse::title)
+                .containsExactlyInAnyOrder("Call dentist: 10 total", "Clean oven: 45 total",
+                        "Read a book: 600 total, 10 per session", "Deep work: 600 total, 20 per session", "Unknown");
+    }
+
+    @Test
     void nonPositiveOrNonNumericAvailableMinutesReturns400() throws Exception {
         for (String invalid : List.of("0", "-5", "abc")) {
             mockMvc.perform(get("/recommendations").param("availableMinutes", invalid))
@@ -143,6 +164,11 @@ class RecommendationApiTest {
         LocalDate createdOn = LocalDate.now(clock).minusDays(ageDays);
         Clock createdAt = Clock.fixed(createdOn.atTime(12, 0).atZone(clock.getZone()).toInstant(), clock.getZone());
         return Task.create(title, null, importance, duration, deadline, null, createdAt);
+    }
+
+    private Task withMinSession(Task task, int minSessionMinutes) {
+        task.updateMinSessionMinutes(minSessionMinutes, clock);
+        return task;
     }
 
     private OffsetDateTime inDaysAt(int days) {

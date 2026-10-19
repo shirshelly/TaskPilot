@@ -22,6 +22,7 @@ import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -56,12 +57,24 @@ class TaskRepositoryTest {
     private EntityManager entityManager;
 
     @Test
-    void flywayHasAppliedV1MigrationToTheTestContainer() {
-        Long count = jdbcTemplate.queryForObject(
-                "select count(*) from flyway_schema_history where version = '1' and success = true",
-                Long.class);
+    void flywayHasAppliedAllMigrationsToTheTestContainer() {
+        List<String> versions = jdbcTemplate.queryForList(
+                "select version from flyway_schema_history where success = true order by installed_rank",
+                String.class);
 
-        assertThat(count).isEqualTo(1L);
+        assertThat(versions).containsExactly("1", "2");
+    }
+
+    @Test
+    void minimumSessionRoundTrips() {
+        Task withSession = Task.create("Read a book", null, null, 600, 10, null, null, CLOCK);
+        Task without = Task.create("Clean the oven", null, null, 45, null, null, CLOCK);
+        taskRepository.saveAndFlush(withSession);
+        taskRepository.saveAndFlush(without);
+        entityManager.clear();
+
+        assertThat(taskRepository.findById(withSession.getId()).orElseThrow().getMinSessionMinutes()).isEqualTo(10);
+        assertThat(taskRepository.findById(without.getId()).orElseThrow().getMinSessionMinutes()).isNull();
     }
 
     @Test
@@ -266,6 +279,15 @@ class TaskRepositoryTest {
     @Test
     void databaseRejectsNonPositiveEstimatedDuration() {
         assertThatThrownBy(() -> insertRawTask("ACTIVE", 3, 0, null, null))
+                .isInstanceOf(DataAccessException.class);
+    }
+
+    @Test
+    void databaseRejectsNonPositiveMinimumSession() {
+        Task task = taskRepository.saveAndFlush(Task.create("Task", null, null, null, null, null, CLOCK));
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "update tasks set min_session_minutes = 0 where id = ?", task.getId()))
                 .isInstanceOf(DataAccessException.class);
     }
 

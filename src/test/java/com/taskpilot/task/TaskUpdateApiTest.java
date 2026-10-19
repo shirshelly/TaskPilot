@@ -26,6 +26,7 @@ import java.time.ZonedDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -196,6 +197,51 @@ class TaskUpdateApiTest {
                         {"title": "Anything"}
                         """))
                 .andExpect(status().isNotFound());
+    }
+
+    // --- minimum session (presence-aware like the other nullable fields) ---
+
+    @Test
+    void minimumSessionFollowsOmittedNullValueSemantics() throws Exception {
+        Task task = taskRepository.save(Task.create("Read a book", null, null, 600, 10, null, null, clock));
+
+        mockMvc.perform(patchTask(task.getId(), """
+                        {"title": "Read two books"}
+                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.minSessionMinutes").value(10));
+
+        mockMvc.perform(patchTask(task.getId(), """
+                        {"minSessionMinutes": 25}
+                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.minSessionMinutes").value(25));
+        assertThat(reload(task).getMinSessionMinutes()).isEqualTo(25);
+
+        mockMvc.perform(patchTask(task.getId(), """
+                        {"minSessionMinutes": null}
+                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.minSessionMinutes").value(nullValue()));
+        Task cleared = reload(task);
+        assertThat(cleared.getMinSessionMinutes()).isNull();
+        assertThat(cleared.getEstimatedDurationMinutes()).isEqualTo(600);
+    }
+
+    @Test
+    void nonPositiveMinimumSessionRejectsTheWholePatch() throws Exception {
+        Task before = taskRepository.save(Task.create("Read a book", null, null, 600, 10, null, null, clock));
+
+        mockMvc.perform(patchTask(before.getId(), """
+                        {"title": "Would be renamed", "minSessionMinutes": 0}
+                        """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        Task persisted = reload(before);
+        assertThat(persisted.getTitle()).isEqualTo("Read a book");
+        assertThat(persisted.getMinSessionMinutes()).isEqualTo(10);
+        assertThat(persisted.getVersion()).isEqualTo(before.getVersion());
     }
 
     // --- conditional PATCH (If-Match, §24 / §42) ---
