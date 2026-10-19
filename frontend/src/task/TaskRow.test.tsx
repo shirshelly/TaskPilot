@@ -72,6 +72,20 @@ describe('task row actions', () => {
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE')).toHaveLength(1)
   })
 
+  it('returns keyboard focus to the row after the editor closes', async () => {
+    stubFetch((url) => (url.pathname.startsWith('/api/tasks/') ? json(task({ title: 'Plan trip' })) : json([task({ title: 'Plan trip' })])))
+    renderWithApp(<TasksPage />, { route: '/tasks' })
+
+    const row = await screen.findByRole('button', { name: /^Plan trip/ })
+    row.focus()
+    await userEvent.keyboard('{Enter}')
+    await screen.findByRole('dialog', { name: 'Edit task' })
+    await userEvent.keyboard('{Escape}')
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Plan trip/ })).toHaveFocus())
+  })
+
   it('offers Reopen (not Schedule) for a completed task', async () => {
     // Completed "now", so it lands in the expanded Today group.
     const done = task({ title: 'Taxes', status: 'COMPLETED', completedAt: new Date().toISOString() })

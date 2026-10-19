@@ -70,7 +70,9 @@ export function CompleteToggle({ task, className }: { task: Task; className?: st
       disabled={completed || busy}
       onClick={completion.start}
       className={cn(
-        'group/check grid size-[18px] shrink-0 place-items-center rounded-full border-[1.5px] outline-none transition-colors',
+        // The visible circle is 18px; ::after extends the touch target to ~44px.
+        'group/check relative grid size-[18px] shrink-0 place-items-center rounded-full border-[1.5px] outline-none transition-colors',
+        'after:absolute after:-inset-3 after:content-[""]',
         'focus-visible:ring-[3px] focus-visible:ring-ring/50',
         completed
           ? 'border-brand bg-brand text-primary-foreground'
@@ -102,7 +104,7 @@ function ReopenButton({ task }: { task: Task }) {
     <Button
       variant="ghost"
       size="sm"
-      className="text-muted-foreground"
+      className="h-9 text-muted-foreground sm:h-7"
       disabled={busy}
       onClick={() => reopen.mutate()}
     >
@@ -122,7 +124,7 @@ function TaskMenu({ task }: { task: Task }) {
         <Button
           variant="ghost"
           size="icon-sm"
-          className="text-muted-foreground sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 sm:data-[state=open]:opacity-100"
+          className="size-9 text-muted-foreground sm:size-7 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 sm:data-[state=open]:opacity-100"
           aria-label={`Actions for “${task.title}”`}
           disabled={busy}
         >

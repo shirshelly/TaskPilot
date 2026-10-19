@@ -25,13 +25,35 @@ interface Overlay {
   task: Task | null
   open: boolean
   session: number
+  /** Where keyboard focus goes back to when the dialog closes. */
+  returnFocus: (event: Event) => void
 }
 
-const closed: Overlay = { task: null, open: false, session: 0 }
+const closed: Overlay = { task: null, open: false, session: 0, returnFocus: () => {} }
+
+/**
+ * These dialogs open programmatically (from rows and menus), so Radix has no trigger to return
+ * focus to and it would fall to <body>. Remember what was focused when the dialog opened — for a
+ * menu item, the menu's ⋯ button — and go back there; if it has disappeared (e.g. the task was
+ * completed or deleted), fall back to the main region.
+ */
+function focusRestorer(): (event: Event) => void {
+  let origin = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  const menu = origin?.closest('[role="menu"]')
+  if (menu?.id) origin = document.querySelector<HTMLElement>(`[aria-controls="${menu.id}"]`)
+  return (event) => {
+    event.preventDefault()
+    const target = origin?.isConnected ? origin : document.getElementById('main')
+    target?.focus()
+  }
+}
 
 function useOverlay() {
   const [state, setState] = useState<Overlay>(closed)
-  const open = useCallback((task: Task | null) => setState((s) => ({ task, open: true, session: s.session + 1 })), [])
+  const open = useCallback((task: Task | null) => {
+    const returnFocus = focusRestorer()
+    setState((s) => ({ task, open: true, session: s.session + 1, returnFocus }))
+  }, [])
   const setOpen = useCallback((next: boolean) => setState((s) => ({ ...s, open: next })), [])
   return [state, open, setOpen] as const
 }
@@ -58,13 +80,19 @@ export function TaskOverlaysProvider({ children }: { children: ReactNode }) {
   return (
     <TaskOverlaysContext.Provider value={value}>
       {children}
-      <QuickCreateDialog key={`create-${create.session}`} open={create.open} onOpenChange={setCreateOpen} />
+      <QuickCreateDialog
+        key={`create-${create.session}`}
+        open={create.open}
+        onOpenChange={setCreateOpen}
+        onCloseAutoFocus={create.returnFocus}
+      />
       {edit.task && (
         <EditTaskSheet
           key={`edit-${edit.session}`}
           task={edit.task}
           open={edit.open}
           onOpenChange={setEditOpen}
+          onCloseAutoFocus={edit.returnFocus}
         />
       )}
       {schedule.task && (
@@ -73,6 +101,7 @@ export function TaskOverlaysProvider({ children }: { children: ReactNode }) {
           task={schedule.task}
           open={schedule.open}
           onOpenChange={setScheduleOpen}
+          onCloseAutoFocus={schedule.returnFocus}
         />
       )}
       {completion.task && (
@@ -81,6 +110,7 @@ export function TaskOverlaysProvider({ children }: { children: ReactNode }) {
           task={completion.task}
           open={completion.open}
           onOpenChange={setCompletionOpen}
+          onCloseAutoFocus={completion.returnFocus}
         />
       )}
       {remove.task && (
@@ -89,6 +119,7 @@ export function TaskOverlaysProvider({ children }: { children: ReactNode }) {
           task={remove.task}
           open={remove.open}
           onOpenChange={setDeleteOpen}
+          onCloseAutoFocus={remove.returnFocus}
         />
       )}
     </TaskOverlaysContext.Provider>

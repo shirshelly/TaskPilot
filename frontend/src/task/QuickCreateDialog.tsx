@@ -24,7 +24,15 @@ import { SessionLongerWarning } from './SessionLongerWarning'
 import { StartAfterDueWarning } from './StartAfterDueWarning'
 
 /** Title + Enter is enough; everything else lives behind "More options". */
-export function QuickCreateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function QuickCreateDialog({
+  open,
+  onOpenChange,
+  onCloseAutoFocus,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onCloseAutoFocus?: (event: Event) => void
+}) {
   const { zone, today } = useAppTime()
   const navigate = useNavigate()
   const create = useCreateTask()
@@ -64,7 +72,7 @@ export function QuickCreateDialog({ open, onOpenChange }: { open: boolean; onOpe
 
   return (
     <Dialog open={open} onOpenChange={(next) => !create.isPending && onOpenChange(next)}>
-      <DialogContent className="top-[12vh] translate-y-0 gap-0 p-0 sm:max-w-lg">
+      <DialogContent className="top-[12vh] translate-y-0 gap-0 p-0 sm:max-w-lg" onCloseAutoFocus={onCloseAutoFocus}>
         <form onSubmit={submit} noValidate>
           <DialogHeader className="px-5 pt-5">
             <DialogTitle className="font-serif text-2xl font-normal">New task</DialogTitle>

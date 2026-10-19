@@ -11,10 +11,12 @@ export function SessionCompletionDialog({
   task,
   open,
   onOpenChange,
+  onCloseAutoFocus,
 }: {
   task: Task
   open: boolean
   onOpenChange: (open: boolean) => void
+  onCloseAutoFocus?: (event: Event) => void
 }) {
   const complete = useCompleteTask(task.id, completionFeedback)
 
@@ -31,10 +33,10 @@ export function SessionCompletionDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !complete.isPending && onOpenChange(next)}>
-      <DialogContent className="sm:max-w-md" aria-busy={complete.isPending}>
+      <DialogContent className="sm:max-w-md" aria-busy={complete.isPending} onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>What did you finish?</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="break-words">
             <span className="font-medium text-foreground">{task.title}</span> is worked on in sessions.
           </DialogDescription>
         </DialogHeader>

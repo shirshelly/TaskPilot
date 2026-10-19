@@ -51,6 +51,12 @@ export function AppShell() {
 function Frame({ action, children }: { action?: ReactNode; children: ReactNode }) {
   return (
     <div className="min-h-dvh">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-card focus:px-3 focus:py-2 focus:text-sm focus:shadow"
+      >
+        Skip to content
+      </a>
       <header className="sticky top-0 z-30 border-b border-border/60 bg-background/85 backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-[1120px] items-center gap-6 px-4 sm:px-6 lg:px-8">
           <Link
@@ -69,7 +75,9 @@ function Frame({ action, children }: { action?: ReactNode; children: ReactNode }
           {action && <div className="ml-auto hidden sm:block">{action}</div>}
         </div>
       </header>
-      <main className="mx-auto max-w-[1120px] px-4 pb-28 sm:px-6 lg:px-8">{children}</main>
+      <main id="main" tabIndex={-1} className="mx-auto max-w-[1120px] px-4 pb-28 outline-none sm:px-6 lg:px-8">
+        {children}
+      </main>
     </div>
   )
 }

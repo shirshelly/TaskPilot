@@ -41,11 +41,13 @@ export function ScheduleDialog({
   open,
   onOpenChange,
   onScheduled,
+  onCloseAutoFocus,
 }: {
   task: Task
   open: boolean
   onOpenChange: (open: boolean) => void
   onScheduled?: (task: Task) => void
+  onCloseAutoFocus?: (event: Event) => void
 }) {
   const { zone, today } = useAppTime()
   const schedule = useScheduleTask(task.id)
@@ -89,11 +91,11 @@ export function ScheduleDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !schedule.isPending && onOpenChange(next)}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" onCloseAutoFocus={onCloseAutoFocus}>
         <form onSubmit={submit} noValidate className="grid gap-5">
           <DialogHeader>
             <DialogTitle>{scheduleLabel}</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="break-words">
               <span className="font-medium text-foreground">{task.title}</span>
               {task.scheduledFor && <> · currently {inSentence(formatSchedule(task.scheduledFor, zone, today))}</>}
             </DialogDescription>

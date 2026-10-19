@@ -21,11 +21,13 @@ export function DeleteTaskDialog({
   open,
   onOpenChange,
   onDeleted,
+  onCloseAutoFocus,
 }: {
   task: Task
   open: boolean
   onOpenChange: (open: boolean) => void
   onDeleted?: () => void
+  onCloseAutoFocus?: (event: Event) => void
 }) {
   const remove = useDeleteTask(task.id)
 
@@ -42,9 +44,9 @@ export function DeleteTaskDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={(next) => !remove.isPending && onOpenChange(next)}>
-      <AlertDialogContent>
+      <AlertDialogContent onCloseAutoFocus={onCloseAutoFocus}>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete “{task.title}”?</AlertDialogTitle>
+          <AlertDialogTitle className="break-words">Delete “{task.title}”?</AlertDialogTitle>
           <AlertDialogDescription>This permanently removes the task. It can't be undone.</AlertDialogDescription>
         </AlertDialogHeader>
         {remove.isError && <InlineAlert title="Couldn't delete">{describeActionError(remove.error)}</InlineAlert>}

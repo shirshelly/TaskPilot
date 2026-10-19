@@ -48,7 +48,17 @@ const STATUS_LABELS: Record<Task['status'], string> = { ACTIVE: 'Active', SCHEDU
  * sides changed need explicit confirmation). Nothing is retried, merged or overwritten
  * automatically.
  */
-export function EditTaskSheet({ task, open, onOpenChange }: { task: Task; open: boolean; onOpenChange: (open: boolean) => void }) {
+export function EditTaskSheet({
+  task,
+  open,
+  onOpenChange,
+  onCloseAutoFocus,
+}: {
+  task: Task
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onCloseAutoFocus?: (event: Event) => void
+}) {
   const { zone, today } = useAppTime()
   const detail = useTask(task)
   const update = useUpdateTask(task.id)
@@ -164,7 +174,10 @@ export function EditTaskSheet({ task, open, onOpenChange }: { task: Task; open: 
   return (
     <>
       <Sheet open={open} onOpenChange={requestClose}>
-        <SheetContent className="gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-md">
+        <SheetContent
+          className="gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-md"
+          onCloseAutoFocus={onCloseAutoFocus}
+        >
           <form onSubmit={submit} noValidate className="flex h-full flex-col">
             <SheetHeader className="border-b border-border px-5 py-4">
               <SheetTitle className="font-serif text-2xl font-normal">Edit task</SheetTitle>
