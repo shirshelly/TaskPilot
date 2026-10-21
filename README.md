@@ -10,32 +10,41 @@ lifecycle state machine, transactions and optimistic locking, background activat
 timezone-correct date logic — plus a deliberately small React frontend that presents the
 backend's decisions without re-implementing them.
 
+> **Status:** V1 is complete — backend and interactive frontend are implemented and tested, and
+> run locally. Authentication, deployment and multi-user support are not part of V1.
+
 ![Today: Agenda first, with the Focus panel beside it](docs/screenshots/today.png)
+
+**Engineering at a glance:** domain-modelled task lifecycle · PostgreSQL transactions ·
+optimistic concurrency with `If-Match` · background scheduling · deterministic recommendations ·
+timezone-correct dates · integration tests against real PostgreSQL
 
 ## What it does
 
-- **Agenda (Today).** Everything scheduled for today or due by today, rolled over until handled,
-  ordered by urgency: missed deadlines, missed schedules, due today, due within three days, then
-  by scheduled time. Dates only — no hidden scoring.
-- **Focus (Recommendations).** "I have 30 minutes — what should I do?" Active tasks that fit the
-  time, ranked deterministically by importance, deadline urgency and age. The top pick is
-  featured; alternatives follow in the backend's order.
-- **Start on vs. Due by.** A task can be hidden until a start date (`scheduledFor`) and/or have a
-  deadline; the two are separate concepts. A background worker activates scheduled tasks on their
-  date, and catches up after downtime.
-- **Work in sessions.** A task can have an estimated total (*Read a book: 10 h*) and a
-  **minimum session** (*10 min*). With a time limit, a task qualifies if a session fits, so long
-  projects still get recommended for short slots. Completing such a task asks
-  *"What did you finish?"* — **I'm done for now** (nothing changes) or **I finished the entire
-  task** — so a short session can't complete a project by accident.
-- **Safe editing.** Edits send a minimal `PATCH` with `If-Match`. If the task changed elsewhere,
-  your draft is kept and you can review the differences, discard, or save only your own changes
-  over the latest version.
-- **History.** Completed tasks are grouped by day, week and month in collapsible sections.
+- **See what's on today.** An Agenda of everything scheduled for today or due by today —
+  including anything left over from earlier days — with the most time-critical first.
+- **Pick what to do next.** Say how much time you have; get your actionable tasks ranked by
+  importance, deadline urgency and age, with one featured suggestion.
+- **Keep "start on" and "due by" apart.** A task can be hidden until the day it becomes relevant,
+  have a deadline, or both. Scheduled tasks reappear automatically on their date.
+- **Make progress in short sessions.** Give a long task a minimum session (*read a book: 10 h
+  total, 10 min at a time*) and it can be suggested for short slots. When you tick it off you
+  choose between *I'm done for now* and *I finished the entire task*.
+- **Edit safely.** If a task changed elsewhere while you were editing, nothing is overwritten:
+  your draft is kept and you choose what to keep.
+- **Look back.** Completed tasks are grouped by day, week and month.
 
-| Focus with 30 minutes | Session-aware completion | Edit conflict review |
-|---|---|---|
-| ![Focus panel filtered to 30 minutes](docs/screenshots/focus-30-minutes.png) | ![What did you finish? dialog](docs/screenshots/session-completion.png) | ![Conflict review in the edit sheet](docs/screenshots/conflict-review.png) |
+**Focus panel with 30 minutes available**
+
+![Focus panel filtered to 30 minutes](docs/screenshots/focus-30-minutes.png)
+
+**Finishing a session vs. finishing the task**
+
+![What did you finish? dialog](docs/screenshots/session-completion.png)
+
+**Reviewing a conflicting edit**
+
+![Conflict review in the edit sheet](docs/screenshots/conflict-review.png)
 
 More screenshots: [completed groups](docs/screenshots/completed-groups.png),
 [quick create with hours](docs/screenshots/quick-create.png),
@@ -45,7 +54,7 @@ More screenshots: [completed groups](docs/screenshots/completed-groups.png),
 ## Architecture
 
 ```text
-React (Vite) ── /api proxy ──▶ Controller (HTTP, DTOs, If-Match)
+React (Vite) ── /api (dev proxy) ──▶ Controller (HTTP, DTOs, If-Match)
                                   │
                                Service (transactions, orchestration)
                                   │
@@ -79,8 +88,12 @@ JUnit 5 · Mockito · Testcontainers — React 19 · TypeScript · Vite · Tailw
 - **Rich domain model.** `Task` owns `complete`, `reopen`, `schedule`, `activate` and its
   invariants; `status` can't be set directly anywhere. The database repeats key invariants as
   `CHECK` constraints.
-- **Concurrency.** JPA `@Version` everywhere; `PATCH` honours `If-Match` (412 before anything is
-  applied), and a commit-time race is a 409. The activation worker isolates conflicts per task.
+- **Concurrency.** `Task` is versioned with JPA `@Version`; `PATCH` honours `If-Match` (412 before
+  anything is applied), and a commit-time race is a 409. The activation worker isolates conflicts
+  per task.
+- **Agenda and scheduling.** The Agenda is ordered by urgency tiers (missed deadline, missed
+  schedule, due today, due soon, planned) using dates only. A background worker activates
+  scheduled tasks on their date and catches up after downtime.
 - **Structured errors.** RFC 9457 Problem Details with stable codes (`VALIDATION_FAILED`,
   `TASK_NOT_FOUND`, `INVALID_STATE_TRANSITION`, `VERSION_CONFLICT`, …); clients branch on codes,
   never on messages.
@@ -100,17 +113,37 @@ full design (domain, API, ordering, error contract, frontend conventions) is in
 
 **Prerequisites:** Java 21, Docker, Node.js 22+.
 
+**1. PostgreSQL.** The first time, create the container:
+
 ```bash
-# 1. PostgreSQL
 docker run -d --name taskpilot-postgres \
   -e POSTGRES_DB=taskpilot -e POSTGRES_USER=taskpilot -e POSTGRES_PASSWORD=taskpilot \
   -p 5432:5432 postgres:16
+```
 
-# 2. Backend on :8080 (Flyway applies migrations on startup)
+After that, start the existing container (if it is already running, there is nothing to do —
+`docker ps` shows it):
+
+```bash
+docker start taskpilot-postgres
+```
+
+These credentials are for local development only; don't reuse them anywhere else.
+
+**2. Backend** — in one terminal, from the repository root (port 8080; Flyway applies the
+migrations on startup):
+
+```bash
 ./mvnw spring-boot:run
+```
 
-# 3. Frontend on :5173 (proxies /api/* to the backend)
-cd frontend && npm install && npm run dev
+**3. Frontend** — in a second terminal (port 5173; the dev server proxies `/api/*` to the
+backend):
+
+```bash
+cd frontend
+npm install   # first time only
+npm run dev
 ```
 
 Open <http://localhost:5173>. Configuration is by environment variable (defaults in
@@ -150,7 +183,7 @@ unknown or lifecycle fields.
 ./mvnw clean test          # 208 tests; Docker required (Testcontainers PostgreSQL 16)
 cd frontend
 npm test                   # 125 tests (Vitest + Testing Library)
-npm run typecheck && npx eslint . && npm run build
+npm run typecheck && npm run lint && npm run build
 ```
 
 Business rules are tested at the lowest layer that owns them: domain unit tests for lifecycle and
