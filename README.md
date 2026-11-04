@@ -1,5 +1,7 @@
 # TaskPilot
 
+[![CI](https://github.com/shirshelly/TaskPilot/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/shirshelly/TaskPilot/actions/workflows/ci.yml)
+
 A single-user personal task manager built to answer two questions well:
 
 1. **What do I have today?** — a time-critical Agenda.
@@ -180,9 +182,9 @@ unknown or lifecycle fields.
 ## Testing
 
 ```bash
-./mvnw clean test          # 208 tests; Docker required (Testcontainers PostgreSQL 16)
+./mvnw clean test          # Docker required (Testcontainers PostgreSQL 16)
 cd frontend
-npm test                   # 125 tests (Vitest + Testing Library)
+npm test                   # Vitest + Testing Library
 npm run typecheck && npm run lint && npm run build
 ```
 
@@ -191,7 +193,8 @@ invariants, ranker and Agenda-ordering unit tests, PostgreSQL integration tests 
 constraints, optimistic locking, timezone boundaries), API tests through MockMvc against real
 PostgreSQL, and worker tests with a fixed clock. Frontend tests cover the PATCH diff and conflict
 rebase, DST-aware time helpers, duration parsing, error handling, completed-task grouping, and
-the main interactions.
+the main interactions. GitHub Actions runs the backend tests and the frontend lint, tests and
+build on every push and pull request to `main`.
 
 ## Design decisions and trade-offs
 

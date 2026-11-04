@@ -1969,6 +1969,14 @@ automatically.
   order, so each task belongs to exactly one group; empty groups are hidden. The backend list
   and its order are unchanged — there is no backend grouping or pagination in V1.
 
+### Known limitation
+
+`startOfDayIso` still builds its result with `TZDate.tz`, which reads the date through the system
+zone first, so in rare cases the result can depend on the browser's timezone. A comparison of
+2026–2027 found one difference: a browser in `Australia/Lord_Howe` with the application zone
+`America/Santiago`, on 2 days, where the result falls on the previous date. Future improvement:
+compute it from the zone's offsets, as `zonedDateTimeIso` does.
+
 ---
 
 # Future Roadmap
