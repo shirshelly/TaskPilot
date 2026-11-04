@@ -105,7 +105,7 @@ JUnit 5 · Mockito · Testcontainers — React 19 · TypeScript · Vite · Tailw
   mutations (no optimistic guesses about derived views), 60 s polling while visible, refetch on
   focus, and a refresh at midnight in the app zone.
 
-A longer list of talking points is in [`docs/INTERVIEW-NOTES.md`](docs/INTERVIEW-NOTES.md); the
+A longer list of design decisions is in [`docs/DESIGN-DECISIONS.md`](docs/DESIGN-DECISIONS.md); the
 full design (domain, API, ordering, error contract, frontend conventions) is in
 [`docs/V1-DESIGN.md`](docs/V1-DESIGN.md).
 
@@ -118,7 +118,7 @@ full design (domain, API, ordering, error contract, frontend conventions) is in
 ```bash
 docker run -d --name taskpilot-postgres \
   -e POSTGRES_DB=taskpilot -e POSTGRES_USER=taskpilot -e POSTGRES_PASSWORD=taskpilot \
-  -p 5432:5432 postgres:16
+  -p 127.0.0.1:5432:5432 postgres:16
 ```
 
 After that, start the existing container (if it is already running, there is nothing to do —

@@ -1,6 +1,6 @@
-# TaskPilot — Interview Talking Points
+# TaskPilot — Design Decisions
 
-Short, defensible points about the design. Each links an engineering choice to the problem it
+A summary of the main design decisions. Each links an engineering choice to the problem it
 solves and the trade-off it accepts. Details: [`V1-DESIGN.md`](V1-DESIGN.md).
 
 ## Backend
@@ -77,5 +77,4 @@ axe-core clean (WCAG 2.1 AA) at desktop and 320 px. Errors are explained by code
 keep stale data visible with a retry.
 
 **Restraint.** No global store, no optimistic UI, no form library, no backend grouping or
-pagination: each was considered and rejected for a concrete reason, which is itself a talking
-point.
+pagination: each was considered and rejected for a concrete reason.
