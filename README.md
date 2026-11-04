@@ -113,7 +113,8 @@ full design (domain, API, ordering, error contract, frontend conventions) is in
 
 ## Running locally
 
-**Prerequisites:** Java 21, Docker, Node.js 22+.
+**Prerequisites:** Java 21, Docker, Node.js 22 (22.22.2 or later; the line CI tests). The
+frontend's dependencies also accept 24.15+ and 26+, but not 23 or 25.
 
 **1. PostgreSQL.** The first time, create the container:
 
@@ -131,6 +132,10 @@ docker start taskpilot-postgres
 ```
 
 These credentials are for local development only; don't reuse them anywhere else.
+
+If port 5432 is already in use, choose another host port and keep the `127.0.0.1` prefix, for
+example `-p 127.0.0.1:55432:5432`. Then start the backend in step 2 with
+`DB_URL=jdbc:postgresql://localhost:55432/taskpilot ./mvnw spring-boot:run`.
 
 **2. Backend** — in one terminal, from the repository root (port 8080; Flyway applies the
 migrations on startup):
