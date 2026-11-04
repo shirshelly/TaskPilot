@@ -1,4 +1,4 @@
-import { TZDate } from '@date-fns/tz'
+import { TZDate, tzOffset } from '@date-fns/tz'
 
 /**
  * Time handling in the backend's application zone (GET /app-info), never the browser's.
@@ -65,7 +65,15 @@ export function startOfDayIso(date: IsoDate, zone: string): string {
 export function zonedDateTimeIso(date: IsoDate, time: string, zone: string): string {
   const [year, month, day] = splitDate(date)
   const [hours, minutes] = time.split(':').map(Number)
-  return TZDate.tz(zone, year, month - 1, day, hours, minutes).toISOString()
+  // Not TZDate.tz(zone, year, ...): it reads the fields through the system zone first, so its
+  // choice between the two occurrences of a repeated time depends on where the code runs.
+  const wall = Date.UTC(year, month - 1, day, hours, minutes)
+  const offsetBefore = tzOffset(zone, new Date(wall - 86_400_000))
+  const offsetAfter = tzOffset(zone, new Date(wall + 86_400_000))
+  const candidates = [wall - offsetBefore * 60_000, wall - offsetAfter * 60_000].sort((a, b) => a - b)
+  const instant =
+    candidates.find((t) => t + tzOffset(zone, new Date(t)) * 60_000 === wall) ?? wall - offsetBefore * 60_000
+  return new TZDate(instant, zone).toISOString()
 }
 
 /** True if `instant` is exactly the start of its own day in `zone` — the date-only convention. */

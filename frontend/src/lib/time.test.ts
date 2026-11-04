@@ -47,6 +47,21 @@ describe('zonedDateTimeIso (Start on with a time)', () => {
   it('resolves a repeated autumn time to its earlier occurrence', () => {
     expect(zonedDateTimeIso('2026-10-25', '01:30', JERUSALEM)).toBe('2026-10-25T01:30:00.000+03:00')
   })
+
+  // These depend on the system zone if the fix regresses, so CI (UTC) and a developer's machine
+  // catch different zones here.
+  it.each([
+    ['America/New_York', '2026-11-01', '01:30', '2026-11-01T01:30:00.000-04:00'],
+    ['Europe/London', '2026-10-25', '01:30', '2026-10-25T01:30:00.000+01:00'],
+    ['Australia/Lord_Howe', '2027-04-04', '01:45', '2027-04-04T01:45:00.000+11:00'],
+  ])('picks the earlier occurrence of a repeated time in %s', (zone, date, time, expected) => {
+    expect(zonedDateTimeIso(date, time, zone)).toBe(expected)
+  })
+
+  it('leaves times just outside the repeated hour on their only occurrence', () => {
+    expect(zonedDateTimeIso('2026-10-25', '00:30', JERUSALEM)).toBe('2026-10-25T00:30:00.000+03:00')
+    expect(zonedDateTimeIso('2026-10-25', '02:30', JERUSALEM)).toBe('2026-10-25T02:30:00.000+02:00')
+  })
 })
 
 describe('zonedParts', () => {
