@@ -165,7 +165,8 @@ Open <http://localhost:5173>. Configuration is by environment variable (defaults
 
 To experiment without touching your data, use a second database:
 `docker exec taskpilot-postgres createdb -U taskpilot taskpilot_dev` and start the backend with
-`DB_URL=jdbc:postgresql://localhost:5432/taskpilot_dev`.
+`DB_URL=jdbc:postgresql://localhost:5432/taskpilot_dev ./mvnw spring-boot:run`. If you chose
+another host port in step 1, use it in place of `5432`.
 
 ## API
 
